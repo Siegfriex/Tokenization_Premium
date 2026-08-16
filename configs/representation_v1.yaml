@@ -1,0 +1,80 @@
+# Representation feature contract — machine-readable freeze
+# Source of truth: ssot/Korean_English_Tokenization_Premium_Research_Spec_v1.0-2.pdf (KOEN-TP-RS-001 v1.0), §12.2, §13
+# Owner: Claude Orchestrator. This file only freezes the research-facing D-02 contract — actual
+# extraction code (unicodedata / grapheme-cluster library choice, regex definitions) is Codex's
+# implementation call under this contract, same division of labor as configs/morphology_v1.yaml.
+# Companion doc: docs/contracts/NB03_REPRESENTATION_FEATURES_PRECONTRACT_v1.md
+
+schema_id: D-02
+spec_ref: "§12.2 (D-02 Representation Features)"
+grain: "one row per pair_id (per-language sub-measurements are _ko/_en suffixed columns, not separate rows)"
+primary_key: pair_id
+foreign_key: "pair_id -> D-01 Pair Registry"
+
+variable_groups:
+  unicode_length:
+    spec_ref: "§12.2"
+    fields: [codepoint_count, grapheme_count]
+    definition_rule: "DN-01 — char_count(ambiguous) 사용 금지. codepoint_count와 grapheme_count는 분리 저장."
+    grapheme_rule: "extended grapheme cluster는 Unicode \\X 규칙을 따르는 구현 사용, 라이브러리 버전 고정 및 provenance에 기록"
+  lexical_length:
+    spec_ref: "§12.2"
+    fields: [ko_eojeol_count, en_word_count]
+    note: "eojeol/word count는 형태소 분석(D-03)과 무관한 표면형 공백 분할 count — Kiwi 실행 여부에 의존하지 않는다"
+  byte:
+    spec_ref: "§12.2, §13.3"
+    fields: [utf8_bytes, bytes_per_codepoint, bytes_per_grapheme]
+    formula:
+      bytes_per_codepoint: "B_{i,l} / C_{i,l}  (§13.3 BytesPerCodePoint)"
+      note: "언어별(_ko/_en)로 각각 계산. pair-level ByteDensityRatio(§8.3)는 D-04/decomposition 단계에서 두 언어값의 비로 계산 — D-02는 언어별 원값만 저장"
+  whitespace:
+    spec_ref: "§12.2, §13.4"
+    fields: [whitespace_count, whitespace_density, space_run_count]
+    formula:
+      whitespace_density: "W_{i,l} / C_{i,l}  (§13.4 WhitespaceDensity)"
+  script:
+    spec_ref: "§12.2"
+    fields: [hangul_ratio, latin_ratio, digit_ratio, punctuation_ratio, symbol_ratio, other_ratio]
+    note: "Unicode script/category 기준 비율, 합은 1에 근접 (compositional feature — §21 원칙 적용, 회귀에서 reference category 하나 제외 또는 sensitivity로만 compositional transform 사용)"
+  mixing:
+    spec_ref: "§12.2"
+    fields: [script_type_count, script_switch_count]
+  special_expression:
+    spec_ref: "§12.2"
+    fields: [url_flag, email_flag, emoji_flag, code_like_pattern_flag]
+    note: "hard-exclusion 판단(§10.1 markup-dominant)과는 별개 — 여기는 accepted pair 내부의 기술적 flag"
+  pair_length_ratio:
+    spec_ref: "§13.5"
+    field: LengthRatio_i
+    formula: "log(C_{i,KO} / C_{i,EN})"
+    smoothing_rule: "모든 accepted pair는 비어있지 않으므로 primary 식에 +1 smoothing을 넣지 않는다. zero count 가능한 개별 feature ratio만 사전 정의된 small constant 또는 count model 사용"
+  provenance:
+    spec_ref: "§12.2"
+    fields: [feature_extractor_version, unicode_library_version]
+
+morphology_group_boundary_decision:
+  status: "ENGINEERING RECOMMENDATION (Claude Orchestrator, not yet Director-approved) — flagged per RESEARCH_CONTRACT house style"
+  issue: >
+    SSOT §12.2's D-02 table lists a "morphology" variable group (morpheme/particle/ending/affix
+    counts and ratios) as part of Representation Features. But §37 notebook order runs
+    03_representation_features BEFORE 04_morphology_features — so 03 cannot compute Kiwi-derived
+    ratios that 04 has not produced yet. This is the same class of ordering problem already solved
+    for D-01 §16.B (nullable-column pattern) in docs/contracts/G1_PAIR_REGISTRY_PRECONTRACT_v1.md.
+  recommendation: >
+    D-02 (REP_FEATURES_v001.parquet) does NOT store morpheme/particle/ending/affix columns at all.
+    These four ratios remain exclusively in D-03 (MORPH_FEATURES_KIWI_v001.parquet), joined on
+    pair_id at analysis time (07/08). This avoids duplicate storage and avoids a nullable-then-
+    backfilled column pair. The "morphology" row in the SSOT §12.2 table is read as "the D-02 feature
+    catalogue's conceptual neighbor is morphology, joined via pair_id" rather than "D-02 physically
+    contains morphology columns."
+  supersedes_if_overridden_by: "Research Director decision — if overridden, apply the same nullable +
+    morphology_status=NOT_GENERATED_PHASE3 pattern as D-01 §16.B instead."
+
+file_naming:
+  spec_ref: "§38"
+  canonical: "REP_FEATURES_v001.parquet"
+
+downstream_consumers:
+  - "04_morphology_features.ipynb (joins on pair_id, independent computation, no dependency on D-02 content)"
+  - "07_eda_and_decomposition.ipynb (T02, F04-F05 — byte/codepoint groups feed exact decomposition descriptive tables)"
+  - "09_explanatory_models.ipynb (M1 = M0 + byte/whitespace/script/surface features, per configs/research_v1.yaml model_blocks)"
