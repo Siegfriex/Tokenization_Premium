@@ -64,7 +64,17 @@ STRUCTURAL_FLAGS_IN_PRIORITY_ORDER = (
     "exact_duplicate_flag",
 )
 
-# Precontract SS9: 21 columns introduced by v002 on top of v001's 44.
+# Precontract SS9: 21 columns introduced by v002 on top of v001's 44, PLUS
+# `exact_duplicate_flag` (self-test correction 2026-08-16 — SS9's own "v002
+# 신규 컬럼" table lists only 4 of the 5 SS3a/SS3c structural hard-exclusion
+# flags, omitting `exact_duplicate_flag`; that omission was faithfully
+# transcribed here too. check_05/check_07 already read this column directly,
+# so leaving it out of this expected-set would make check_04 report it as an
+# "unexpected_new_column" on every real run — a false MATERIAL_FINDING on a
+# perfectly valid artifact. Caught by tests/test_p2_v002_bounded_audit.py's
+# synthetic-fixture self-test; the same omission in the precontract doc
+# itself (docs/contracts/P2_NORMALIZE_QC_PRECONTRACT_v1.md SS9) is a
+# different branch's file and is flagged upstream, not edited here.)
 EXPECTED_V002_NEW_COLUMNS: dict[str, str] = {
     "normalization_rule_version": "VARCHAR",
     "normalization_ops": "VARCHAR",
@@ -73,6 +83,7 @@ EXPECTED_V002_NEW_COLUMNS: dict[str, str] = {
     "markup_dominant_flag": "BOOLEAN",
     "control_char_excess_flag": "BOOLEAN",
     "decode_integrity_flag": "BOOLEAN",
+    "exact_duplicate_flag": "BOOLEAN",
     "short_text_flag": "BOOLEAN",
     "long_text_flag": "BOOLEAN",
     "high_digit_ratio_flag": "BOOLEAN",
