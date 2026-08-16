@@ -31,6 +31,12 @@ outputs/**
 !data/interim/.gitkeep
 !data/processed/.gitkeep
 !models/.gitkeep
+!outputs/manifests/
+!outputs/manifests/**
+!outputs/figures/
+!outputs/figures/F00_*
+!outputs/reports/
+!outputs/reports/ENVIRONMENT_*
 
 # OS / editor
 .DS_Store
