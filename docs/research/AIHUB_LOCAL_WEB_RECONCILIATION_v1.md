@@ -3,7 +3,7 @@
 - Local evidence: `origin/data/g0-aihub-recon@15b9129e7dd2ab2ba7afeaa37ed890b15ff8f5a9` — `outputs/reports/data_recon/AIHUB_RAW_RECON_20260816T132650+0900.md` + `outputs/manifests/data_recon/aihub_{raw_profile,duplicate_overlap}_20260816T132650+0900.json`
 - Web evidence: `origin/evidence/g0-perplexity@c5b704f4b534f4a5d4da5d3c3af78516f6814f6b` — `docs/evidence/aihub/AIHUB_KOEN_SOURCE_EVIDENCE_2026-08-16.md`
 - Canonical authority: `KOEN-TP-RS-001` §9.3 (source hierarchy) + `research/g0-claude@51147e3` contract
-- **This document is NOT G1 PASS, NOT a QC acceptance, NOT a source_tier freeze.** It only reconciles what two independent evidence tracks actually establish.
+- **This document is NOT G1 PASS, NOT a QC acceptance.** The evidentiary matrix below (§1-4) is unchanged factual reconciliation. **Task 2's tier/role recommendations have since been superseded by Research Director decision D-RD-05** (2026-08-16) — see `docs/research/G1_APPROVED_DECISIONS_2026-08-16.md` for the binding values. Task 2's table below is retained for its supporting-evidence reasoning but its `recommended_role`/`candidate_tier` fields are historical, not current.
 
 **Key fact verified directly (grep over the raw profile manifest)**: no `71265`/`71266` string literal appears anywhere in the local raw JSON. The local↔official mapping below is a **title-string match only** — the local files never assert their own official AIHub `dataSetSn`. Treat every "identity confirmed" claim below as *title/domain/scale correspondence*, not a cryptographic or ID-field link.
 
@@ -89,7 +89,7 @@
 
 ---
 
-# Task 2 — Source Role / Tier Recommendation (RECOMMENDATION ONLY — `configs/research_v1.yaml.corpus_tier_assignment` still `null`)
+# Task 2 — Source Role / Tier Recommendation (HISTORICAL — see D-RD-05 for the approved, binding version)
 
 SSOT §9.3 tier definitions used verbatim:
 - **Tier A** — curated/official parallel corpus, 명시적 번역쌍, 안정적 license/metadata
@@ -97,6 +97,8 @@ SSOT §9.3 tier definitions used verbatim:
 - **Tier C** — web-mined parallel corpus, 대규모 확보용, semantic QC 강화 필요
 
 ## 025 / D71265
+
+**Approved by D-RD-05, unchanged from this recommendation**: `candidate_source_tier=A`, `research_role=PRIMARY_BACKBONE`, `primary_analysis_eligible=true`.
 
 | Field | Value |
 |---|---|
@@ -112,6 +114,8 @@ SSOT §9.3 tier definitions used verbatim:
 
 ## 026 / D71266
 
+**Approved by D-RD-05, unchanged from this recommendation, with an explicit condition**: `candidate_source_tier=A`, `research_role=PRIMARY_DOMAIN_SUPPLEMENT`, `primary_analysis_eligible=true` — condition: domain-specialized/single-direction structure must stay explicit and 026 must never be pooled with 025 without a labeled stratum (see Identifiability Gate finding in `docs/contracts/G1_PAIR_REGISTRY_PRECONTRACT_v1.md` — 026's `domain=기술과학` is now confirmed near-perfectly confounded with `source=특허정보원`).
+
 | Field | Value |
 |---|---|
 | recommended_role | Domain supplement (**not** a generic backbone) |
@@ -126,16 +130,16 @@ SSOT §9.3 tier definitions used verbatim:
 
 | Field | Value |
 |---|---|
-| recommended_role | Sensitivity-only candidate (matches Perplexity's own disposition) |
-| candidate_tier | B (tentative) |
+| recommended_role (historical, as of first draft) | Sensitivity-only candidate |
+| candidate_tier (historical, as of first draft) | ~~B (tentative)~~ — **withdrawn by D-RD-05: Research Director ruled Tier B must not be used as a provenance-shortfall fallback category; SSOT Tier B specifically means "benchmark parallel corpus," which Legacy's undocumented construction does not establish.** Approved value: `source_tier = null / UNASSIGNED`. |
 | confidence | LOW-MEDIUM |
-| supporting_evidence | Clean, structured, consistently-schema'd XLSX across all 10 workbooks (not a noisy web scrape → not Tier C); strong quantitative match to the official 1.1M/0.5M written/spoken breakdown |
+| supporting_evidence | Clean, structured, consistently-schema'd XLSX across all 10 workbooks (not a noisy web scrape); strong quantitative match to the official 1.1M/0.5M written/spoken breakdown |
 | blocking_unknown | No license field at all; no translation-stage/annotator provenance; official current-version/schema link unconfirmed (Perplexity: all gates NOT YET PASSED) |
 
-**Three-way distinction the directive asked for**:
-- **Tier assignment**: the version/schema gap keeps this out of Tier A (which requires "안정적 license/metadata" — Legacy has neither a license field nor version confirmation). Tentative **Tier B**, not C, because internal structure/consistency is high even though external provenance is weak.
-- **Sensitivity-only status**: **yes, recommended** — exactly because pairability is real but provenance/version is not yet officially anchored, this is the textbook profile for a Tier A/B sensitivity-only comparison set per §9.3 rather than a primary-cohort component.
-- **Quality-anchor status**: **not recommended** — no documented QA/construction manual has been inspected for Legacy (same reasoning Perplexity applied when refusing to assign ANY quality anchor at all — "NONE ASSIGNED" — pending a documented QA sample for any candidate).
+**Three-way distinction the directive asked for (original reasoning, tier conclusion superseded above)**:
+- **Tier assignment**: **superseded** — see D-RD-05: `source_tier = null/UNASSIGNED`, not B.
+- **Sensitivity-only status**: **still approved** (`research_role = SENSITIVITY_ONLY`, `primary_analysis_eligible = false`) — pairability is real but provenance/version is not officially anchored.
+- **Quality-anchor status**: **not recommended**, unchanged — no documented QA/construction manual has been inspected for Legacy.
 
 ## D71693
 
