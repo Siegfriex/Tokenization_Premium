@@ -7,6 +7,10 @@
 
 **Key fact verified directly (grep over the raw profile manifest)**: no `71265`/`71266` string literal appears anywhere in the local raw JSON. The local↔official mapping below is a **title-string match only** — the local files never assert their own official AIHub `dataSetSn`. Treat every "identity confirmed" claim below as *title/domain/scale correspondence*, not a cryptographic or ID-field link.
 
+**Vice Director addendum (2026-08-16) — WEB/OFFICIAL evidence vs LOCAL OBSERVED evidence stay separate tracks.** Perplexity's web/official-document audit (`evidence/g0-perplexity`) has no filesystem access and cannot verify local raw content; conversely, this reconciliation's local track cannot verify AIHub's official release/version metadata. Neither track substitutes for the other, and neither may silently overwrite the other's findings — disagreements are logged as `CONFLICT_FOR_RECONCILIATION`, not resolved by picking one side. As of this update, `origin/evidence/g0-perplexity` remains unchanged at `c5b704f` (no new official-document audit has actually been pushed yet, despite guidance anticipating one) — verified via `git fetch` rather than assumed.
+
+**Forbidden inferences (explicit, apply everywhere in this document set)**: do not assert `mt` field = confirmed MT (machine-translation) draft; do not assert `ko`/`en` = confirmed human-final text; do not assert the meaning of `ko_original`/`en_original` fields beyond "present/absent" until officially confirmed; do not assert raw `license="open"` = redistribution permission. All four remain open/unconfirmed until an official source document says otherwise.
+
 ## 1. Dataset 025 ↔ D71265 candidate
 
 | Field | Value |
@@ -98,7 +102,7 @@ SSOT §9.3 tier definitions used verbatim:
 
 ## 025 / D71265
 
-**Approved by D-RD-05, unchanged from this recommendation**: `candidate_source_tier=A`, `research_role=PRIMARY_BACKBONE`, `primary_analysis_eligible=true`.
+**Approved by D-RD-05, unchanged from this recommendation, NOT withdrawn (Vice Director reconfirmed 2026-08-16)**: `candidate_source_tier=A`, `research_role=PRIMARY_BACKBONE`, `primary_analysis_eligible=true`. New field: `provenance_closure_status = PENDING_OFFICIAL_SCHEMA_AND_RELEASE_LINK` (official dataSetSn/version/release link still unconfirmed — see grep finding above).
 
 | Field | Value |
 |---|---|
@@ -114,7 +118,7 @@ SSOT §9.3 tier definitions used verbatim:
 
 ## 026 / D71266
 
-**Approved by D-RD-05, unchanged from this recommendation, with an explicit condition**: `candidate_source_tier=A`, `research_role=PRIMARY_DOMAIN_SUPPLEMENT`, `primary_analysis_eligible=true` — condition: domain-specialized/single-direction structure must stay explicit and 026 must never be pooled with 025 without a labeled stratum (see Identifiability Gate finding in `docs/contracts/G1_PAIR_REGISTRY_PRECONTRACT_v1.md` — 026's `domain=기술과학` is now confirmed near-perfectly confounded with `source=특허정보원`).
+**Approved by D-RD-05, unchanged from this recommendation, NOT withdrawn, with an explicit condition**: `candidate_source_tier=A`, `research_role=PRIMARY_DOMAIN_SUPPLEMENT`, `primary_analysis_eligible=true` — condition: domain-specialized/single-direction structure must stay explicit and 026 must never be pooled with 025 without a labeled stratum (see Identifiability Gate finding in `docs/contracts/G1_PAIR_REGISTRY_PRECONTRACT_v1.md` — 026's `domain=기술과학` is now confirmed near-perfectly confounded with `source=특허정보원`). New field: `provenance_closure_status = PENDING_OFFICIAL_SCHEMA_AND_RELEASE_LINK`.
 
 | Field | Value |
 |---|---|
@@ -131,7 +135,7 @@ SSOT §9.3 tier definitions used verbatim:
 | Field | Value |
 |---|---|
 | recommended_role (historical, as of first draft) | Sensitivity-only candidate |
-| candidate_tier (historical, as of first draft) | ~~B (tentative)~~ — **withdrawn by D-RD-05: Research Director ruled Tier B must not be used as a provenance-shortfall fallback category; SSOT Tier B specifically means "benchmark parallel corpus," which Legacy's undocumented construction does not establish.** Approved value: `source_tier = null / UNASSIGNED`. |
+| candidate_tier (historical, as of first draft) | ~~B (tentative)~~ — **withdrawn by D-RD-05: Research Director ruled Tier B must not be used as a provenance-shortfall fallback category; SSOT Tier B specifically means "benchmark parallel corpus," which Legacy's undocumented construction does not establish.** Approved value: `source_tier = null / UNASSIGNED`. **D-RD-05 itself is NOT withdrawn (Vice Director reconfirmed 2026-08-16)** — this row only reflects that the Tier-B sub-recommendation within it was withdrawn; `research_role=SENSITIVITY_ONLY`/`primary_analysis_eligible=false` stand. New field: `provenance_closure_status = PARTIAL_OFFICIAL_CONSTRUCTION_CONFIRMED_FIELD_AND_RELEASE_LINK_PENDING` (the official D87 catalogue record confirms this corpus's general existence/scale category, per Perplexity's audit — that is the "partial" part — but current field-level schema and a specific release version are not linked; this is a real, distinct status from 025/026's `PENDING_OFFICIAL_SCHEMA_AND_RELEASE_LINK`, reflecting that Legacy has *more* official corroboration on scale/composition than 025/026 do, even though its schema/version confirmation is weaker). Perplexity's own web-audit disposition language (e.g. any "UNASSIGNED"-style gate wording it might use) is a **separate WEB-track status and must never overwrite this LOCAL/policy-track `candidate_tier` field** — see the WEB/LOCAL separation note above. |
 | confidence | LOW-MEDIUM |
 | supporting_evidence | Clean, structured, consistently-schema'd XLSX across all 10 workbooks (not a noisy web scrape); strong quantitative match to the official 1.1M/0.5M written/spoken breakdown |
 | blocking_unknown | No license field at all; no translation-stage/annotator provenance; official current-version/schema link unconfirmed (Perplexity: all gates NOT YET PASSED) |

@@ -36,3 +36,16 @@ AMB-05 is no longer "pick a target N." Primary analysis cohort = every 025+026 p
 - Duplicate Analysis-Representative selection rule — `WAIT_FOR_TARGETED_EDA_RECON` (other agents actively investigating 025 direction×split duplicate decomposition)
 - AMB-13-adjacent: none remaining
 - Full detail and rationale: `docs/research/G1_DECISION_QUEUE_v1.md`
+
+## Vice Director Addendum — Evidence-Level / Duplicate Semantics (2026-08-16)
+
+1. **WEB/OFFICIAL evidence and LOCAL OBSERVED evidence are separate tracks.** Perplexity has no filesystem access; this reconciliation has no official-release access. Neither overwrites the other — disagreements are `CONFLICT_FOR_RECONCILIATION`, not resolved by picking a side. Verified via `git fetch`: `evidence/g0-perplexity` is unchanged at `c5b704f` — no new official-document audit has actually landed yet, despite the addendum anticipating one.
+2. **D-RD-05 is NOT withdrawn** — 025=A/`PRIMARY_BACKBONE`, 026=A/`PRIMARY_DOMAIN_SUPPLEMENT`, Legacy=`null`/`SENSITIVITY_ONLY` all stand. New field `provenance_closure_status` added (separate from `source_tier`): 025/026=`PENDING_OFFICIAL_SCHEMA_AND_RELEASE_LINK`, Legacy=`PARTIAL_OFFICIAL_CONSTRUCTION_CONFIRMED_FIELD_AND_RELEASE_LINK_PENDING`.
+3. **Forbidden inferences, restated**: `mt`≠confirmed MT draft; `ko`/`en`≠confirmed human-final; `ko_original`/`en_original` semantics unconfirmed beyond presence; `license="open"`≠redistribution permission.
+4. **Evidence-level discipline**: new Data Recon evidence is held at `EXECUTED_REPORTED/PERSISTENCE_PENDING` until a remote commit is verified. **Verified this round**: `data/g0-aihub-recon@6e89b9e` ("persist SHA-256 collision-resistant duplicate/identity recon v001") is confirmed pushed — its figures (item 5-7 below) are treated as **L4**, not pending.
+5. **Duplicate contract correction**: Analysis Representative = provenance pointer only, never the source of analysis-time semantic covariates. `translation_direction` is **group-resolved**: direction_set={KO_TO_EN}→KO_TO_EN; ={EN_TO_KO}→EN_TO_KO; ={KO_TO_EN,EN_TO_KO}→UNKNOWN+`direction_conflict_flag=true`.
+6. **025 cross-direction exact-content overlap = 50,511** (L4-verified) — confirms ~54% of 025's 93,823 duplicate groups are direction-mirroring (benign); ~46% remain unexplained, still `WAIT_FOR_TARGETED_EDA_RECON`.
+7. **Legacy News(2)↔한국문화 exact overlap = 2,469** (L4-verified) — recorded as `POTENTIAL_SOURCE_REUSE / COMPOSITION_OVERLAP`, not an asserted error.
+8. G0/`main` lineage untouched — confirmed, this worktree only ever writes to `research/g1-prep-claude`.
+
+Full detail: `docs/research/PAIR_IDENTITY_AND_DUPLICATE_CONTRACT_v1.md` and `docs/research/AIHUB_LOCAL_WEB_RECONCILIATION_v1.md` (both updated in place with status banners, nothing rewritten silently).
