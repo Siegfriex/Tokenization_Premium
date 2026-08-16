@@ -1,0 +1,152 @@
+# AIHub Local × Web Evidence Reconciliation — v1
+
+- Local evidence: `origin/data/g0-aihub-recon@15b9129e7dd2ab2ba7afeaa37ed890b15ff8f5a9` — `outputs/reports/data_recon/AIHUB_RAW_RECON_20260816T132650+0900.md` + `outputs/manifests/data_recon/aihub_{raw_profile,duplicate_overlap}_20260816T132650+0900.json`
+- Web evidence: `origin/evidence/g0-perplexity@c5b704f4b534f4a5d4da5d3c3af78516f6814f6b` — `docs/evidence/aihub/AIHUB_KOEN_SOURCE_EVIDENCE_2026-08-16.md`
+- Canonical authority: `KOEN-TP-RS-001` §9.3 (source hierarchy) + `research/g0-claude@51147e3` contract
+- **This document is NOT G1 PASS, NOT a QC acceptance, NOT a source_tier freeze.** It only reconciles what two independent evidence tracks actually establish.
+
+**Key fact verified directly (grep over the raw profile manifest)**: no `71265`/`71266` string literal appears anywhere in the local raw JSON. The local↔official mapping below is a **title-string match only** — the local files never assert their own official AIHub `dataSetSn`. Treat every "identity confirmed" claim below as *title/domain/scale correspondence*, not a cryptographic or ID-field link.
+
+## 1. Dataset 025 ↔ D71265 candidate
+
+| Field | Value |
+|---|---|
+| Official dataset ID | D71265, `일상생활 및 구어체 한-영 번역 병렬 말뭉치 데이터` |
+| Local path/family | `data/raw/aigub/025.일상생활 및 구어체 한-영 번역 병렬 말뭉치 데이터/` (JSON+ZIP, 9 physical files / 5 unique SHA-256) |
+| Raw manifest evidence | `aihub_raw_profile_...json` dataset_summaries; SHA-256 per physical file recorded in `AIHUB_RAW_RECON.md` §B |
+| Record grain | top-level `data[]` object = one translation pair |
+| Deterministic pairability | `ko`/`en` co-present in same object → direct pairable; `sn` nonempty & duplicate-free **within each file** (NOT verified across TL1 vs TL2 vs VL1 — see Task 3/4) |
+| KO field | `ko` (+ `ko_original` in 한→영 files) |
+| EN field | `en` (+ `en_original` in 영→한 files) |
+| Pair/source key | `sn` — **file-scoped only**, not confirmed globally unique across sub-files |
+| Translation direction observability | Both directions physically present (TL1=영→한, TL2=한→영); `source_language`/`target_language` observed consistent with file direction |
+| Domain/subdomain metadata | 3 domains / 11 subdomains observed (exact label values not yet enumerated — pending Raw EDA); `source` field differs by direction: 영→한="크라우드 소싱", 한→영="크라우드소싱"(800,096)+"SBS"(399,904) in train — literal string variants, not normalized |
+| Source metadata | Crowd-sourced translation + one broadcaster-labeled subset ("SBS") — raw label, not independently verified |
+| License/acquisition evidence | JSON `license`="open" self-asserted in every unique-content record; Perplexity's official-policy audit (H3) shows AIHub requires application/approval and restricts external redistribution of raw files — **not a contradiction, but "open" must not be promoted to "verified redistribution clearance"** |
+| Raw-text fidelity | Raw preserved; `mt`+`ko_original`/`en_original` fields imply an edit pipeline (source→MT draft→final) whose exact stage semantics are undocumented |
+| Duplicate risk | **High** — 214,252 duplicate-pair rows after first occurrence; 93,823 distinct duplicate pair-hashes (BLAKE2b-64 candidate, collision-possible) out of 2,700,345 unique-content records (~8%) |
+| Train/validation overlap | 47,385 / 300,038 validation rows (≈15.8%) share an exact pair-hash with training — material leakage risk if not handled at split-construction |
+| Quality/provenance unknown | Official `dataSetSn`/version/build-date not linked; translator/reviewer identity unknown; whether duplication is by-design (TL1/TL2 direction-mirroring) or accidental repetition is **unresolved** (see Task 3) |
+| Web/local consistency | Title, domain description (everyday/spoken), and bidirectionality all match Perplexity's D71265 record. No contradiction observed. |
+| Unresolved conflict | None rising to `CONFLICT_FOR_RECONCILIATION` |
+| **Status** | **CONSISTENT_BUT_INCOMPLETE** |
+
+## 2. Dataset 026 ↔ D71266 candidate
+
+| Field | Value |
+|---|---|
+| Official dataset ID | D71266, `기술과학 분야 한-영 번역 병렬 말뭉치 데이터`; web page states "1.5 million sentences" |
+| Local path/family | `data/raw/aigub/026.기술과학 분야 한-영 번역 병렬 말뭉치 데이터/` (JSON only, 4 physical files / 2 unique SHA-256) |
+| Record grain | top-level `data[]` object = one translation pair |
+| Deterministic pairability | `ko`/`en` co-present; `sn` unique within file, 0 duplicates |
+| KO/EN field | `ko` / `en` (+ `ko_original`, single direction only — see below) |
+| Pair/source key | `sn`, file-scoped |
+| Translation direction observability | **Single direction only — entirely 한→영 (KO_TO_EN).** No reverse-direction file exists locally for this family. |
+| Domain/subdomain metadata | 5 domains / 15 subdomains; `source`=한국연구재단(880,593)+특허정보원(319,551) in train — both official Korean research/patent institutions, arguably stronger institutional provenance signal than 025's crowd-sourcing label |
+| License/acquisition evidence | Same self-asserted `license`="open" caveat as 025 |
+| Raw-text fidelity | Same edit-pipeline ambiguity as 025 (`mt`/`ko_original` present) |
+| Duplicate risk | **Low** — only 44 duplicate-pair rows out of 1,350,162 (<0.01%) |
+| Train/validation overlap | 9 / 150,018 (0.006%) — negligible |
+| Quality/provenance unknown | Official ID link unverified (same as 025); **local unique-content count (1,350,162) is ~10% short of the web page's "1.5 million sentences" claim** — could be rounding/marketing language, an older baseline vs current archive, or a scope difference (sentences vs pairs); not resolved by this reconciliation |
+| Web/local consistency | Domain description (technical/science) matches. The 1.35M vs "1.5M" scale gap is a **minor, non-blocking discrepancy** — logged, not silently reconciled |
+| Unresolved conflict | Scale discrepancy noted above; does not rise to `CONFLICT_FOR_RECONCILIATION` (no explicit contradictory claim, just an approximate mismatch) |
+| **Status** | **CONSISTENT_BUT_INCOMPLETE** |
+
+**Domain-confounding flag (T-04 relevant)**: because 026 is 100% `KO_TO_EN` and 025 is mixed-direction, `domain` and `translation_direction` will be **partially confounded** the moment 026 enters the analysis cohort as the sole technology-domain source. This must be visible in the Identifiability Gate (§20.2), not silently absorbed.
+
+## 3. Legacy `한국어-영어 번역(병렬) 말뭉치` ↔ D87 candidate
+
+| Field | Value |
+|---|---|
+| Official dataset ID | D87, `한국어-영어 번역(병렬) 말뭉치`; web page states 1.6M KO-EN sentences: 1.1M written (news, government web, ordinances, Korean culture) + 0.5M spoken. Perplexity's own gate assessment: **H1/H2/H4 all "NOT YET PASSED"** (aggregate catalogue description only, no confirmed current schema/version/pair-key) |
+| Local path/family | `data/raw/aigub/한국어-영어 번역(병렬) 말뭉치/` (10 XLSX workbooks, 10 unique SHA-256) |
+| **Quantitative cross-check (new finding, not in either source document alone)** | Local unique-content total = **1,602,418** ≈ web's "1.6 million". Local "spoken" family (구어체×2 + 대화체) = 200,000+200,000+100,000 = **500,000** — matches web's "0.5m spoken" exactly. Local "written" family (뉴스×4 + 한국문화 + 조례 + 지자체웹사이트) = 801,387+100,646+100,298+100,087 = **1,102,418** ≈ web's "1.1m written". This is a materially stronger quantitative correspondence than either source alone established, and upgrades this pairing beyond Perplexity's standalone "NOT YET PASSED" disposition — **for scale/category composition only**, not for schema/version/pair-key, which remain unconfirmed. |
+| Record grain | one spreadsheet row = one translation pair |
+| Deterministic pairability | `원문`/`번역문` co-present per row → direct pairable. `ID`/`SID` are workbook-scoped only — **127,824 duplicate ID/SID rows** when treated as a global key; 대화체 has no single-column ID at all (`Set Nr.`+`발화자` composite has 8 duplicate rows, not unique either) |
+| KO/EN field | `원문` / `번역문` — no column distinguishes which language was the translation source |
+| Pair/source key | none reliable beyond `workbook_relative_path + sheet_name + physical_row_number` (data-recon's own recommended deterministic fallback) |
+| Translation direction observability | **No `source_language`/`target_language` or original/translated-stage column exists.** Per directive instruction, filename convention alone must not be used to assert direction. |
+| Domain/subdomain metadata | 대화체: 5 categories/59 subcategories/2,779 situations (여행/쇼핑, 비즈니스, 일상대화 top); 뉴스: 10-11 publishers + 3-tier auto-classification (many empty); 한국문화: 102 keywords; 조례: 54 municipalities; 지자체웹사이트: 4 municipalities |
+| Source metadata | Publisher names for news (국민일보/서울경제/한겨레 etc.); no source/institution label for 구어체/대화체/한국문화/조례/지자체웹사이트 |
+| License/acquisition evidence | No license field in any Legacy workbook — translation provenance and license are **UNKNOWN** (worse-documented than 025/026's self-asserted `license` field) |
+| Raw-text fidelity | `원문`/`번역문` present with 0 empty rows across all workbooks; no MT/human/edit-stage distinction available at all |
+| Duplicate risk | **Low-moderate** — 2,494 duplicate-pair rows out of 1,602,418 (~0.16%) |
+| Train/validation overlap | N/A — Legacy has no train/validation split structure |
+| Quality/provenance unknown | Annotator/reviewer identity, license, translation workflow (human vs MT vs post-edited) all unknown; official current-version/schema link unconfirmed |
+| Web/local consistency | Title matches exactly; scale/category breakdown matches closely (see above); schema/version does not (Perplexity's own disposition) |
+| Unresolved conflict | None rising to `CONFLICT_FOR_RECONCILIATION` — the schema/version gap is an absence of evidence on both sides, not a contradiction |
+| **Status** | **CONSISTENT_BUT_INCOMPLETE** (stronger on scale, weaker on schema/version/provenance than 025/026) |
+
+**Direct answer to directive's specific ask**: the local/official gap here (strong pairability locally, weak version/schema provenance officially) affects **sensitivity-only status and quality-anchor eligibility, not raw Tier assignment by itself** — see Task 2 §3 below for the reasoning split.
+
+## 4. D71693 — professional conference interpretation/translation
+
+| Field | Value |
+|---|---|
+| Official dataset ID | D71693, `국제 학술대회용 전문분야 한영/영한 통번역 데이터`; bidirectional KO-EN/EN-KO, 900,572 text sentences + 2,017 hours speech (Perplexity, all gates "NOT YET PASSED") |
+| Local path/family | **None found.** Not present among the 3 identified local dataset families (025, 026, Legacy). |
+| **Status** | **NOT_ACQUIRED / OUTSIDE_CURRENT_CORPUS** (per directive instruction — no new download proposed or started) → overall reconciliation label: **WEB_ONLY** |
+
+---
+
+# Task 2 — Source Role / Tier Recommendation (RECOMMENDATION ONLY — `configs/research_v1.yaml.corpus_tier_assignment` still `null`)
+
+SSOT §9.3 tier definitions used verbatim:
+- **Tier A** — curated/official parallel corpus, 명시적 번역쌍, 안정적 license/metadata
+- **Tier B** — benchmark parallel corpus, 연구 benchmark 성격, 규모 작아도 품질 우수
+- **Tier C** — web-mined parallel corpus, 대규모 확보용, semantic QC 강화 필요
+
+## 025 / D71265
+
+| Field | Value |
+|---|---|
+| recommended_role | Primary backbone |
+| candidate_tier | A |
+| confidence | MEDIUM |
+| supporting_evidence | Official government-portal (AIHub) curated corpus; least domain-specialized of the three families → best general-language starting population; bidirectional coverage (both KO→EN and EN→KO) |
+| blocking_unknown | License self-assertion not externally verified; official dataSetSn/version link not confirmed |
+
+**Explicit ruling requested by directive — duplicate rate vs tier**: the 214,252 duplicate-pair rows / 15.8% train-validation overlap are **downstream QC/D-01 problems, not a reason to demote the Tier**. Tier A/B/C in SSOT §9.3 is about curation/officialness of provenance, not row-level hygiene — every tier can contain duplicates, and SSOT §10.1 already provides the mechanism (hard exclusion of "완전 중복 pair") to handle it at the QC layer. Recommend **keeping candidate_tier=A** and routing the duplicate/overlap problem entirely to Task 3/4 below and to `02_normalize_and_qc`.
+
+**Bidirectional/duplicate distinction requested by directive**: whether 025's high duplicate-pair count reflects TL1/TL2 being direction-mirrored views of an overlapping sentence pool (by design) vs accidental repetition **cannot be determined from this evidence alone** — flagged as an open question in Task 3.
+
+## 026 / D71266
+
+| Field | Value |
+|---|---|
+| recommended_role | Domain supplement (**not** a generic backbone) |
+| candidate_tier | A |
+| confidence | MEDIUM-HIGH |
+| supporting_evidence | Official research-institution sourcing (한국연구재단/특허정보원) — arguably stronger institutional provenance signal than 025; very low duplicate/overlap rate; explicit technical/science subdomain structure |
+| blocking_unknown | Single-direction-only (KO_TO_EN) — domain/direction confounding risk (see §2 above); scale discrepancy vs web's "1.5M" claim |
+
+**Why not a generic backbone**: 026 is domain-specialized by construction (technical/science) and single-direction; treating it as interchangeable with 025's general-purpose bidirectional population would silently introduce the exact domain-source confounding SSOT T-04 warns against. It must remain a labeled stratum.
+
+## Legacy / D87
+
+| Field | Value |
+|---|---|
+| recommended_role | Sensitivity-only candidate (matches Perplexity's own disposition) |
+| candidate_tier | B (tentative) |
+| confidence | LOW-MEDIUM |
+| supporting_evidence | Clean, structured, consistently-schema'd XLSX across all 10 workbooks (not a noisy web scrape → not Tier C); strong quantitative match to the official 1.1M/0.5M written/spoken breakdown |
+| blocking_unknown | No license field at all; no translation-stage/annotator provenance; official current-version/schema link unconfirmed (Perplexity: all gates NOT YET PASSED) |
+
+**Three-way distinction the directive asked for**:
+- **Tier assignment**: the version/schema gap keeps this out of Tier A (which requires "안정적 license/metadata" — Legacy has neither a license field nor version confirmation). Tentative **Tier B**, not C, because internal structure/consistency is high even though external provenance is weak.
+- **Sensitivity-only status**: **yes, recommended** — exactly because pairability is real but provenance/version is not yet officially anchored, this is the textbook profile for a Tier A/B sensitivity-only comparison set per §9.3 rather than a primary-cohort component.
+- **Quality-anchor status**: **not recommended** — no documented QA/construction manual has been inspected for Legacy (same reasoning Perplexity applied when refusing to assign ANY quality anchor at all — "NONE ASSIGNED" — pending a documented QA sample for any candidate).
+
+## D71693
+
+| Field | Value |
+|---|---|
+| recommended_role | N/A |
+| candidate_tier | **NOT_ACQUIRED / OUTSIDE_CURRENT_CORPUS** |
+| confidence | N/A |
+| supporting_evidence | N/A |
+| blocking_unknown | No local raw data exists; no acquisition proposed here |
+
+---
+
+See `docs/research/PAIR_IDENTITY_AND_DUPLICATE_CONTRACT_v1.md` for the duplicate/overlap semantic design (Task 3/4), and `docs/research/G1_DECISION_QUEUE_v1.md` for which of the open items above require Research Director decision vs can wait for Raw EDA.
