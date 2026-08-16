@@ -9,8 +9,9 @@ import nbformat
 
 
 WORKTREE_ROOT = Path(__file__).resolve().parents[4]
-CANONICAL_ROOT = Path("/home/sieg/projects-wsl/Tokenization_Premium")
-SOURCE = CANONICAL_ROOT / "notebooks/01_aihub_local_recon_evidence_export.ipynb"
+SOURCE_ROOT = Path("/home/sieg/projects-wsl/Tokenization_Premium")
+DEFAULT_RAW_ROOT = SOURCE_ROOT / "data/raw/aigub"
+SOURCE = SOURCE_ROOT / "notebooks/01_aihub_local_recon_evidence_export.ipynb"
 TARGET = WORKTREE_ROOT / "notebooks/exploratory/evidence/AIHUB_LOCAL_RECON_EVIDENCE_EXPORT_20260816.ipynb"
 
 if not SOURCE.is_file():
@@ -68,18 +69,32 @@ for cell in notebook.cells:
     if cell.cell_type == "code":
         source = source.replace(
             "PROJECT_ROOT = Path('/home/sieg/projects-wsl/Tokenization_Premium')",
-            f"WORKTREE_ROOT = Path({str(WORKTREE_ROOT)!r})\nCANONICAL_PROJECT_ROOT = Path({str(CANONICAL_ROOT)!r})\nPROJECT_ROOT = WORKTREE_ROOT",
+            f'''def discover_project_root(start=Path.cwd()):
+    for candidate in (start.resolve(), *start.resolve().parents):
+        if (candidate / 'pyproject.toml').is_file() and (candidate / 'src/tokenization_premium').is_dir():
+            return candidate
+    raise RuntimeError(f'Tokenization_Premium checkout not found from {{start}}')
+
+DISCOVERED_PROJECT_ROOT = discover_project_root()
+sys.path.insert(0, str(DISCOVERED_PROJECT_ROOT / 'src'))
+from tokenization_premium.paths import PROJECT_ROOT
+assert PROJECT_ROOT.resolve() == DISCOVERED_PROJECT_ROOT.resolve()
+RAW_ROOT = Path(os.environ.get('TOKENIZATION_PREMIUM_RAW_ROOT', {str(DEFAULT_RAW_ROOT)!r})).expanduser().resolve()''',
         )
-        source = source.replace("OUTPUT_ROOT = PROJECT_ROOT / 'outputs/aihub_recon'", "OUTPUT_ROOT = WORKTREE_ROOT / 'outputs/aihub_recon_g1'")
-        source = source.replace("PROJECT_ROOT/'data/raw/aigub/", "CANONICAL_PROJECT_ROOT/'data/raw/aigub/")
+        source = source.replace(
+            "OUTPUT_ROOT = PROJECT_ROOT / 'outputs/aihub_recon'",
+            "OUTPUT_ROOT = PROJECT_ROOT / 'outputs/aihub_recon_g1'",
+        )
+        source = re.sub(r"PROJECT_ROOT/'data/raw/aigub/([^']+)'", r"RAW_ROOT/'\1'", source)
         source = source.replace(
             "path=PROJECT_ROOT/entry.relative_file_path; suffix=path.suffix.lower()",
-            "path=CANONICAL_PROJECT_ROOT/entry.relative_file_path; suffix=path.suffix.lower()",
+            "path=RAW_ROOT/Path(entry.relative_file_path).relative_to('data/raw/aigub'); suffix=path.suffix.lower()",
         )
         source = source.replace(
             "'allowed_raw_roots': [root.relative_to(PROJECT_ROOT).as_posix() for root in ALLOWED_ROOTS]",
-            "'allowed_raw_roots': [root.relative_to(CANONICAL_PROJECT_ROOT).as_posix() for root in ALLOWED_ROOTS]",
+            "'allowed_raw_roots': [(Path('data/raw/aigub')/root.relative_to(RAW_ROOT)).as_posix() for root in ALLOWED_ROOTS]",
         )
+        source = source.replace("'project_root': str(PROJECT_ROOT)", "'project_root': 'CURRENT_CHECKOUT'")
         source = re.sub(
             r"PREEXISTING_NOTEBOOK_ROWS = .*\nRUN_TIMESTAMP_KST =",
             f"PREEXISTING_NOTEBOOK_ROWS = {inventory_rows!r}\nRUN_TIMESTAMP_KST =",
@@ -88,7 +103,7 @@ for cell in notebook.cells:
         )
         source = source.replace(
             "def safe_rel(path):\n    return path.resolve().relative_to(PROJECT_ROOT.resolve()).as_posix()",
-            "def safe_rel(path):\n    resolved=path.resolve()\n    if resolved == CANONICAL_PROJECT_ROOT.resolve() or CANONICAL_PROJECT_ROOT.resolve() in resolved.parents:\n        return resolved.relative_to(CANONICAL_PROJECT_ROOT.resolve()).as_posix()\n    return resolved.relative_to(WORKTREE_ROOT.resolve()).as_posix()",
+            "def safe_rel(path):\n    resolved=path.resolve()\n    project=PROJECT_ROOT.resolve()\n    raw=RAW_ROOT.resolve()\n    if resolved == project or project in resolved.parents:\n        return resolved.relative_to(project).as_posix()\n    if resolved == raw or raw in resolved.parents:\n        suffix=resolved.relative_to(raw)\n        return (Path('data/raw/aigub')/suffix).as_posix()\n    raise ValueError(f'path is outside project and raw roots: {path.name}')",
         )
     cell.source = source
 

@@ -1,12 +1,12 @@
 {
-  "run_timestamp_kst": "2026-08-16T15:51:00+09:00",
+  "run_timestamp_kst": "2026-08-16T17:33:25+09:00",
   "evidence_scope": "LOCAL_OBSERVED_ONLY",
   "cross_dataset_pooling": false,
   "datasets": [
     {
       "local_dataset_label": "LOCAL_DIR_025",
       "local_root_relative_path": "data/raw/aigub/025.일상생활 및 구어체 한-영 번역 병렬 말뭉치 데이터",
-      "run_timestamp_kst": "2026-08-16T15:51:00+09:00",
+      "run_timestamp_kst": "2026-08-16T17:33:25+09:00",
       "identity": {
         "local_directory_name": "025.일상생활 및 구어체 한-영 번역 병렬 말뭉치 데이터",
         "official_dataset_id": "NOT VERIFIED",
@@ -241,7 +241,7 @@
     {
       "local_dataset_label": "LOCAL_DIR_026",
       "local_root_relative_path": "data/raw/aigub/026.기술과학 분야 한-영 번역 병렬 말뭉치 데이터",
-      "run_timestamp_kst": "2026-08-16T15:51:00+09:00",
+      "run_timestamp_kst": "2026-08-16T17:33:25+09:00",
       "identity": {
         "local_directory_name": "026.기술과학 분야 한-영 번역 병렬 말뭉치 데이터",
         "official_dataset_id": "NOT VERIFIED",
@@ -453,7 +453,7 @@
     {
       "local_dataset_label": "LOCAL_LEGACY_KO_EN_XLSX",
       "local_root_relative_path": "data/raw/aigub/한국어-영어 번역(병렬) 말뭉치",
-      "run_timestamp_kst": "2026-08-16T15:51:00+09:00",
+      "run_timestamp_kst": "2026-08-16T17:33:25+09:00",
       "identity": {
         "local_directory_name": "한국어-영어 번역(병렬) 말뭉치",
         "official_dataset_id": "NOT VERIFIED",

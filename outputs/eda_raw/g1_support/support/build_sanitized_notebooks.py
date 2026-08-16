@@ -9,7 +9,7 @@ import nbformat
 
 ROOT = Path(__file__).resolve().parents[4]
 NOTEBOOK_DIR = ROOT / "notebooks/exploratory/raw"
-CANONICAL_ROOT = Path("/home/sieg/projects-wsl/Tokenization_Premium")
+DEFAULT_RAW_ROOT = Path("/home/sieg/projects-wsl/Tokenization_Premium/data/raw/aigub")
 
 
 def md(source: str, cell_id: str):
@@ -26,24 +26,36 @@ def code(source: str, cell_id: str):
 
 def build(config: dict, target_call: str, target_explanation: str, filename: str) -> None:
     setup = f'''from pathlib import Path
-import json, sys
+import json, os, sys
 import pandas as pd
 from IPython.display import Markdown, display
 
-WORKTREE_ROOT = Path({str(ROOT)!r})
-CANONICAL_PROJECT_ROOT = Path({str(CANONICAL_ROOT)!r})
-SUPPORT_DIR = WORKTREE_ROOT / "outputs/eda_raw/g1_support/support"
+def discover_project_root(start=Path.cwd()):
+    for candidate in (start.resolve(), *start.resolve().parents):
+        if (candidate / "pyproject.toml").is_file() and (candidate / "src/tokenization_premium").is_dir():
+            return candidate
+    raise RuntimeError(f"Tokenization_Premium checkout not found from {{start}}")
+
+DISCOVERED_PROJECT_ROOT = discover_project_root()
+sys.path.insert(0, str(DISCOVERED_PROJECT_ROOT / "src"))
+from tokenization_premium.paths import PROJECT_ROOT
+assert PROJECT_ROOT.resolve() == DISCOVERED_PROJECT_ROOT.resolve()
+
+RAW_ROOT = Path(os.environ.get("TOKENIZATION_PREMIUM_RAW_ROOT", {str(DEFAULT_RAW_ROOT)!r})).expanduser().resolve()
+SUPPORT_DIR = PROJECT_ROOT / "outputs/eda_raw/g1_support/support"
 sys.path.insert(0, str(SUPPORT_DIR))
 
 from sanitized_raw_eda import profile_dataset, save_profile, plot_profile, {target_call.split('(')[0]}
 
 CONFIG = {config!r}
-OUTPUT_DIR = WORKTREE_ROOT / "outputs/eda_raw/g1_support" / CONFIG["artifact_prefix"]
-FIGURE_DIR = WORKTREE_ROOT / "outputs/figures/eda_raw/g1_support" / CONFIG["artifact_prefix"]
+CONFIG["raw_root"] = str(RAW_ROOT / CONFIG.pop("raw_relative_dir"))
+OUTPUT_DIR = PROJECT_ROOT / "outputs/eda_raw/g1_support" / CONFIG["artifact_prefix"]
+FIGURE_DIR = PROJECT_ROOT / "outputs/figures/eda_raw/g1_support" / CONFIG["artifact_prefix"]
 TARGET_OUTPUT_DIR = OUTPUT_DIR / "targeted"
 TARGET_FIGURE_DIR = FIGURE_DIR / "targeted"
 
-print("worktree:", WORKTREE_ROOT)
+print("project root: CURRENT_CHECKOUT")
+print("raw root:", RAW_ROOT)
 print("dataset:", CONFIG["dataset_local_id"])
 print("population: FULL_POPULATION_AGGREGATES")
 print("raw text export: 0")
@@ -134,7 +146,7 @@ build(
         "dataset_local_id": "AIHUB_025_LOCAL_G1_SANITIZED",
         "artifact_prefix": "aihub_025_g1",
         "kind": "json",
-        "raw_root": str(CANONICAL_ROOT / "data/raw/aigub/025.일상생활 및 구어체 한-영 번역 병렬 말뭉치 데이터"),
+        "raw_relative_dir": "025.일상생활 및 구어체 한-영 번역 병렬 말뭉치 데이터",
     },
     "targeted_025(Path(CONFIG['raw_root']), TARGET_OUTPUT_DIR, TARGET_FIGURE_DIR)",
     "direction×split×domain, direction×source×domain, exact-pair duplicate mechanisms, SBS scope, crowd-source string variants, and domain-mapping preview.",
@@ -146,7 +158,7 @@ build(
         "dataset_local_id": "AIHUB_026_LOCAL_G1_SANITIZED",
         "artifact_prefix": "aihub_026_g1",
         "kind": "json",
-        "raw_root": str(CANONICAL_ROOT / "data/raw/aigub/026.기술과학 분야 한-영 번역 병렬 말뭉치 데이터"),
+        "raw_relative_dir": "026.기술과학 분야 한-영 번역 병렬 말뭉치 데이터",
     },
     "targeted_026(Path(CONFIG['raw_root']), TARGET_OUTPUT_DIR, TARGET_FIGURE_DIR)",
     "source×domain crosstab, patent-source/technology-domain row-level biconditional, and domain-mapping preview.",
@@ -158,7 +170,7 @@ build(
         "dataset_local_id": "LOCAL_KO_EN_XLSX_G1_SANITIZED",
         "artifact_prefix": "legacy_ko_en_g1",
         "kind": "xlsx",
-        "raw_root": str(CANONICAL_ROOT / "data/raw/aigub/한국어-영어 번역(병렬) 말뭉치"),
+        "raw_relative_dir": "한국어-영어 번역(병렬) 말뭉치",
     },
     "targeted_legacy(Path(CONFIG['raw_root']), TARGET_OUTPUT_DIR, TARGET_FIGURE_DIR)",
     "News2↔Culture exact-pair overlap, multiplicity, and aggregate metadata concentration under POTENTIAL_CORPUS_COMPOSITION_OVERLAP.",
