@@ -39,6 +39,7 @@ outputs/**
 !outputs/figures/F00_*
 !outputs/reports/
 !outputs/reports/ENVIRONMENT_*
+!outputs/reports/PAIR_REGISTRY_RECONCILIATION_*
 
 # OS / editor
 .DS_Store
