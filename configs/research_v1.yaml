@@ -45,6 +45,7 @@ research_questions:
     spec_ref: "§6.7"
     question: "gpt-oss-20b vs 120b에서 KO/EN request/analysis/final/total token, TTFT, latency, throughput, cost 차이"
     method: "paired serving analysis (Track B)"
+    status: DEFERRED_NOT_EXECUTED  # D-RD-03 / CR-002 — RQ7 자체는 SSOT에서 제거하지 않음, 실행만 연기
 
 outcomes:
   primary:
@@ -88,6 +89,10 @@ taxonomies:
   translation_direction:
     spec_ref: "§9.2"
     values: [KO_TO_EN, EN_TO_KO, HUMAN_PARALLEL_UNKNOWN, UNKNOWN]
+  length_stratum:
+    spec_ref: "§9.2 + D-RD-01 (AMB-04 resolved)"
+    basis: "EN codepoint count"
+    binning: quintile
 
 analysis_unit:
   spec_ref: "§7.1"
@@ -109,8 +114,8 @@ pair_qc:
     flags:
       - short_text_flag
       - long_text_flag
-      - high_digit_ratio_flag   # threshold: null — AMB-08
-      - high_punctuation_ratio_flag  # threshold: null — AMB-08
+      - {name: high_digit_ratio_flag, threshold: "> 0.20"}       # AMB-08 resolved D-RD-01
+      - {name: high_punctuation_ratio_flag, threshold: "> 0.20"}  # AMB-08 resolved D-RD-01
       - script_mix_flag
       - unicode_anomaly_flag
       - translation_quality_review_flag
@@ -121,7 +126,7 @@ pair_qc:
       - "source-level metadata에서 병렬쌍 여부 확인"
       - "multilingual semantic similarity/alignment score — 보조 QC로만 사용 (T-01: 주 결과변수 생성에 미사용)"
       - "strata 기반 수동 audit"
-    manual_audit_sample_n: null  # AMB-06 — spec range 300-500, exact N 미확정
+    manual_audit_sample_n: 500  # AMB-06 resolved D-RD-01 (spec range was 300-500)
     rubric:
       "2": "의미·정보량이 실질적으로 동등"
       "1": "핵심 의미는 대응하나 경미한 누락·추가·의역 존재"
@@ -156,13 +161,13 @@ sensitivity_analyses:
     spec_ref: "§29"
     method: "Benjamini-Hochberg FDR"
     scope: "secondary feature-level / interaction-level hypothesis families only — NOT applied to single primary RQ1"
-    alpha: null  # AMB-03
+    alpha: 0.05  # AMB-03 resolved D-RD-01
 
 cohort_and_split:
   spec_ref: "§23"
   explanatory_model: "전체 analysis cohort에서 계수 추론 + bootstrap + model diagnostics"
   predictive_model:
-    holdout_fraction: null  # AMB-07 — spec range 0.15-0.20
+    holdout_fraction: 0.20  # AMB-07 resolved D-RD-01 (spec range was 0.15-0.20)
     tuning: "training partition 내부에서만"
     split_strategy: "source 수 충분 시 GroupKFold(source_id); 부족 시 pair-level split + near-duplicate cluster group primary, source-held-out test secondary"
     leakage_rule: "LR-01 — text hash + near-duplicate cluster를 group key로 사용, 동일 원문 파생 paraphrase가 train/test에 동시 존재 금지"
@@ -197,8 +202,54 @@ threats:
 
 gates:
   spec_ref: "§31"
-  g2_decomposition_identity_epsilon: null  # AMB-01
-  bootstrap_resamples: null  # AMB-02
+  g2_decomposition_identity_epsilon: 1.0e-10  # AMB-01 resolved D-RD-01
+  bootstrap_resamples: 5000  # AMB-02 resolved D-RD-01
+
+source_specification:
+  spec_ref: "§20.1 (AMB-09 resolved D-RD-01)"
+  primary: fixed_effects
+  alternative_sensitivity: random_intercept
+  random_intercept_candidate_conditions:
+    - "n_source >= 10"
+    - "source/domain 구조가 식별 가능 (identifiability gate 통과)"
+    - "optimizer convergence"
+    - "singular/boundary fit 아님 (non-singular)"
+
+collinearity_diagnostics:
+  spec_ref: "§20.2, §21 (AMB-10 resolved D-RD-01)"
+  vif_warning: 5
+  vif_severe_warning: 10
+  automatic_feature_deletion_by_vif_alone: prohibited
+
+quantile_regression:
+  spec_ref: "§22 (AMB-11 resolved D-RD-01)"
+  reference: 0.50
+  primary_upper_tail: 0.90
+  sensitivity: 0.95
+
+seed_policy:
+  spec_ref: "§30.3"
+  master_seed: 20260816
+  split: 1456095166
+  bootstrap: 4263151703
+  model_tuning: 3618347261
+  serving: 2218276919
+  auxiliary: 2995913794
+
+track_b_status:
+  spec_ref: "§26, D-RD-03 / CR-002"
+  status: DEFERRED_NOT_EXECUTED
+  removed_from_ssot: false
+  prohibited_in_current_phase:
+    - "gpt-oss model download"
+    - "local serving"
+    - "Hugging Face API 호출"
+    - "serving benchmark 실행"
+    - "notebook 12 (12_gpt_oss_serving.ipynb) 실행"
+  deployment_baseline_if_resumed: "Hugging Face hosted API"
+  note: "재개 시점에 exact provider/model ID, revision, API semantics, reasoning telemetry, request/final token accounting, latency observability, cost를 그때 다시 evidence-grounded freeze한다. 현재 세부값은 추측하여 채우지 않는다."
+  affected_artifacts: ["T07", "F09"]
+  unaffected: "Track A (RQ1-RQ6, notebooks 00-11) — 영향 없음"
 
 traceability_matrix:
   spec_ref: "§34"
