@@ -1,0 +1,22 @@
+{
+  "dataset_local_id": "LOCAL_KO_EN_PARALLEL_XLSX_V1",
+  "dataset_title": "Local legacy 한국어–영어 번역 병렬 XLSX family",
+  "audit_timestamp": "2026-08-16T14:11:02+09:00",
+  "audit_completed_timestamp": "2026-08-16T14:12:31+09:00",
+  "raw_dir": "/home/sieg/projects-wsl/Tokenization_Premium/data/raw/aigub/한국어-영어 번역(병렬) 말뭉치",
+  "physical_file_count": 10,
+  "unique_content_file_count": 10,
+  "profiled_unique_data_files": 10,
+  "logical_record_count": 1602418,
+  "sample_record_count": 15966,
+  "population_scope": "FULL POPULATION AGGREGATES over unique SHA-256 JSON/XLSX content",
+  "sample_method": "deterministic BLAKE2b(seed=20260816) hash threshold 10/1000 (~1%); scatter/sample only",
+  "notebook_status": "SUPPORTING / EXPLORATORY / PRE-INGESTION EDA / NOT G1 PASS",
+  "raw_file_manifest_sha": "d3b43a0e6cdfbfadc8d26f7dec0aa4721d13dc28c9c78de117628c865054aeb1",
+  "stability_counts": {
+    "STABLE_FILE": 10,
+    "DOWNLOAD_IN_PROGRESS": 0,
+    "PARTIAL_DOWNLOAD": 0,
+    "UNKNOWN": 0
+  }
+}

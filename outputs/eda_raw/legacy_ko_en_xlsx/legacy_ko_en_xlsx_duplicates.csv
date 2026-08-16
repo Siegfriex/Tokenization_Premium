@@ -1,0 +1,2 @@
+﻿scope,duplicate_pair_rows_after_first,distinct_duplicate_pair_hashes,validation_rows_overlapping_training_pair,candidate_method
+dataset,2494,2494,0,BLAKE2b-64 raw KO+EN; collision possible; no normalization
