@@ -50,9 +50,18 @@
   },
   "heartbeat_path": ".runtime/progress/P2_CANONICAL_20260816T211028/progress.jsonl",
   "quarantine": {
-    "status": "AUTHORIZED_PENDING_MOVE",
+    "status": "EXECUTED_VERIFIED",
+    "executed_at_kst": "2026-08-16T22:06:29+09:00",
     "method": "SAME_FILESYSTEM_RENAME_NO_OVERWRITE",
-    "target_path": ".runtime/quarantine/INC-004/P2_CANONICAL_20260816T211028/PAIR_REGISTRY_v002.INVALID.4a36c8b94b6e.parquet"
+    "target_path": ".runtime/quarantine/INC-004/P2_CANONICAL_20260816T211028/PAIR_REGISTRY_v002.INVALID.4a36c8b94b6e.parquet",
+    "post_move_sha256": "4a36c8b94b6e05e35d16a980443620063a8b853b4d40539905f0db30ee50c312",
+    "post_move_bytes": 2954200837,
+    "post_move_rows": 5652925,
+    "post_move_row_groups": 57,
+    "post_move_columns": 69,
+    "canonical_path_absent": true,
+    "heartbeat_preserved": true,
+    "destructive_operation_performed": false
   },
   "research_semantics_changed": false
 }

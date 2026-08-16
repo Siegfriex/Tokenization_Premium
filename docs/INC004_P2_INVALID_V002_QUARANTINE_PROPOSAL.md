@@ -1,6 +1,6 @@
 # INC-004 Invalid v002 Quarantine Proposal
 
-Status: AUTHORIZED — pending evidence-preserving move
+Status: EXECUTED / VERIFIED at `2026-08-16T22:06:29+09:00`
 
 ## Incident lineage
 
@@ -51,3 +51,14 @@ Postconditions:
 5. no report or completion manifest is synthesized for the failed run.
 
 This move changes publication status only. It does not change corpus bytes, QC rules, survivor semantics, or research estimands.
+
+## Execution result
+
+- Canonical pathname absent: PASS
+- Quarantine pathname present: PASS
+- SHA-256 unchanged: PASS
+- Bytes unchanged: PASS
+- Rows/row groups/columns unchanged: PASS
+- Incident heartbeat retained: PASS
+- Execution worktree tracked state clean: PASS
+- Destructive deletion or overwrite: NOT PERFORMED
