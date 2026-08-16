@@ -1,0 +1,13 @@
+schema_version: serving-config-v1
+track: B
+enabled_in_phase_0: false
+native_tokenizer_family: o200k_harmony
+harmony_serialization_required: true
+protocols:
+  - B1_request_only
+  - B2_controlled_generation
+  - B3_natural_generation
+generation:
+  seed: 20260816
+  determinism_status: NOT_EVALUATED_PHASE_0
+phase_0_rule: Track B serving과 model download를 실행하지 않는다.
