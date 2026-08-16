@@ -4,15 +4,19 @@
 freezes the analyzer identity, prohibited actions, POS mapping, and the two feature blocks — that
 file is the machine-readable source of truth and is **not restated in full here**. This document
 adds the operational details `morphology_v1.yaml` does not cover: grain/keys, failure handling,
-what "ready to implement" means, and the 03/04 boundary resolution (see
-`NB03_REPRESENTATION_FEATURES_PRECONTRACT_v1.md` §4). SSOT refs: §12.3 (D-03 schema), §15
+what "ready to implement" means, and the 03/04 physical-schema question, which remains open (see
+`NB03_REPRESENTATION_FEATURES_PRECONTRACT_v1.md` §4 — status: SPEC_AMBIGUITY /
+PROPOSED_PHYSICAL_SCHEMA_CLARIFICATION, not a resolution). SSOT refs: §12.3 (D-03 schema), §15
 (analyzer freeze), §37 Phase 3.
 
-## 1. Preconditions before this notebook may run
+## 1. Preconditions
 
-Same G1 precondition as NB03 (§1 there). Independent of `03_representation_features.ipynb` —
-per NB03 §4, D-03 does not consume D-02 and D-02 does not consume D-03. Both read `*_text_analysis`
-from the same G1-passed registry; they can run in either order or in parallel.
+Same distinction as NB03 §1: implementation, unit tests, schema preparation, and synthetic/
+small-sample dry runs are not blocked by G1 OPEN. A full-population run promoted as evidentiary D-03
+requires the same G1 PASS precondition as NB03's evidentiary-run precondition. Independent of
+`03_representation_features.ipynb` — per NB03 §4, D-03 does not consume D-02 and D-02 does not
+consume D-03. Both read `*_text_analysis` from the same registry (G1-passed, for the evidentiary
+run); they can run in either order or in parallel.
 
 ## 2. Grain, keys, row-count expectation
 

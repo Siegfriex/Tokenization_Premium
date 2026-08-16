@@ -53,22 +53,34 @@ variable_groups:
     fields: [feature_extractor_version, unicode_library_version]
 
 morphology_group_boundary_decision:
-  status: "ENGINEERING RECOMMENDATION (Claude Orchestrator, not yet Director-approved) — flagged per RESEARCH_CONTRACT house style"
+  status: "SPEC_AMBIGUITY / PROPOSED_PHYSICAL_SCHEMA_CLARIFICATION (Vice Director correction, 2026-08-16)
+    — downgraded from the prior 'ENGINEERING RECOMMENDATION' framing, which read as more settled than
+    it is. NOT a Director-approved decision. NOT a reinterpretation or deletion of SSOT §12.2's
+    morphology row — that row stands as written. Preserved only as CHANGE_REQUEST candidate input
+    (issue/proposed_direction/alternative below), to be raised formally if the Director wants it
+    settled."
+  operational_boundary_unchanged: >
+    Regardless of how this question is resolved, 03_representation_features.ipynb does not compute
+    morphology; 04_morphology_features.ipynb (D-03) remains the sole execution site for morphology
+    measurement.
   issue: >
     SSOT §12.2's D-02 table lists a "morphology" variable group (morpheme/particle/ending/affix
     counts and ratios) as part of Representation Features. But §37 notebook order runs
     03_representation_features BEFORE 04_morphology_features — so 03 cannot compute Kiwi-derived
     ratios that 04 has not produced yet. This is the same class of ordering problem already solved
     for D-01 §16.B (nullable-column pattern) in docs/contracts/G1_PAIR_REGISTRY_PRECONTRACT_v1.md.
-  recommendation: >
+    This does not decide whether §12.2's morphology group belongs physically inside D-02 or only in
+    D-03 — that placement question is open, see proposed_direction/alternative below.
+  proposed_direction: >
     D-02 (REP_FEATURES_v001.parquet) does NOT store morpheme/particle/ending/affix columns at all.
     These four ratios remain exclusively in D-03 (MORPH_FEATURES_KIWI_v001.parquet), joined on
     pair_id at analysis time (07/08). This avoids duplicate storage and avoids a nullable-then-
-    backfilled column pair. The "morphology" row in the SSOT §12.2 table is read as "the D-02 feature
-    catalogue's conceptual neighbor is morphology, joined via pair_id" rather than "D-02 physically
-    contains morphology columns."
-  supersedes_if_overridden_by: "Research Director decision — if overridden, apply the same nullable +
-    morphology_status=NOT_GENERATED_PHASE3 pattern as D-01 §16.B instead."
+    backfilled column pair. This is a proposal only — it does not itself determine how the SSOT
+    §12.2 morphology row should be read.
+  alternative: "Apply the same nullable + morphology_status=NOT_GENERATED_PHASE3 pattern as D-01
+    §16.B instead — add morphology columns to D-02 as null, backfilled later by 04."
+  disposition: "UNRESOLVED. Neither option adopted by this config. Raise as CHANGE_REQUEST if the
+    Research Director wants this settled formally."
 
 file_naming:
   spec_ref: "§38"

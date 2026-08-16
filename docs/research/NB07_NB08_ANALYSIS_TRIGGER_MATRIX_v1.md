@@ -9,9 +9,15 @@ immediately with zero re-derivation of semantics. SSOT refs: §16-17 (baseline a
 inference), §29 (multiple-testing/reporting), §31 (gates), §34 (traceability matrix), §35
 (tables/figures), §37 Phase 5.
 
-**Status: SEMANTICS-READY, PENDING artifacts.** Nothing in this document is executed yet — G1 is
-still OPEN, no v002 population artifact exists as of this writing (2026-08-16 ~21:00 KST,
-[[project_pair_duplicate_recon_v001]] / [[project_d01_independent_audit_v001]]).
+**Status: SEMANTICS-READY, PENDING artifacts.** No real evidentiary result under this document has
+been produced yet — G1 is still OPEN and no corrected canonical P2 v002 population artifact exists
+as of this writing (2026-08-16 ~21:00 KST, [[project_pair_duplicate_recon_v001]] /
+[[project_d01_independent_audit_v001]]). Per the NB03 §1 / NB04 §1 / NB05 §1 distinction between
+implementation and evidentiary promotion, this does not block implementing
+`07_eda_and_decomposition.ipynb` / `08_primary_inference.ipynb` or exercising them against
+synthetic/small-sample input now. What genuinely cannot happen yet is producing a *real* RQ1 result,
+because that requires D-04 with G2/G3 actually PASS on a corrected canonical cohort — a data
+precondition, not a code-readiness one.
 
 ## 1. Artifact -> trigger table
 

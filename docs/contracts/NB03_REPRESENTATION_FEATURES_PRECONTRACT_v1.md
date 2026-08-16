@@ -1,17 +1,26 @@
 # NB03 — Representation Features Precontract — v1
 
 **Status: SEMANTICS-READY, PENDING P2 v002 (2026-08-16).** This is preparation ahead of Phase 3.
-G1 (Data Integrity) is still OPEN — this notebook cannot execute until `02_normalize_and_qc`
-produces a QC'd registry and G1 passes. This document exists so that once that artifact lands,
-`03_representation_features.ipynb` can be implemented against a frozen contract with zero new
-research-semantics decisions in the loop. Machine-readable freeze: `configs/representation_v1.yaml`.
+G1 (Data Integrity) is still OPEN. **G1 OPEN does not block implementation, synthetic/unit-test
+execution, or schema preparation for `03_representation_features.ipynb`** (Vice Director correction,
+2026-08-16) — the extraction code, its unit tests, and the D-02 schema can be built and exercised
+against synthetic or small-sample input now, with zero new research-semantics decisions in the
+loop. What G1 OPEN blocks is promoting a full-population run against the current registry to
+formal evidence: any `REP_FEATURES_v001.parquet` produced before a corrected canonical P2 cohort is
+confirmed is a synthetic/dry-run artifact, not evidentiary D-02. Machine-readable freeze:
+`configs/representation_v1.yaml`.
 SSOT refs: §12.2 (D-02 schema), §13.3-13.5 (feature formulas), §16.1-16.2 (baseline distributions
 and required visualizations), §21 (collinearity/compositional handling), §37 Phase 3.
 
-## 1. Preconditions before this notebook may run
+## 1. Preconditions
 
-- G1 Data Integrity PASS on the pair registry it consumes (pair IDs unique, null/duplicate
-  disposition resolved, source/license metadata complete — SSOT §31 G1).
+**For implementation, unit tests, schema preparation, and synthetic/small-sample dry runs**: none
+beyond the SSOT contract itself — this may proceed now, independent of G1 status.
+
+**For a full-population run promoted as evidentiary D-02** (consumed by NB05/07/08/09 as such):
+G1 Data Integrity PASS on the pair registry it consumes (pair IDs unique, null/duplicate
+disposition resolved, source/license metadata complete — SSOT §31 G1).
+
 - Input is `*_text_analysis` (NFC + BOM-stripped + outer-trim, internal whitespace preserved) per
   the normalization contract (`configs/normalization_v1.yaml`) — **never** `*_text_raw` or a
   further-normalized variant. Using the wrong text column here would silently contaminate every
@@ -35,26 +44,46 @@ and provenance (`feature_extractor_version`, `unicode_library_version`).
 
 **Explicitly out of scope for this notebook**: any morpheme/particle/ending/affix column. See §4.
 
-## 4. The 03/04 boundary (the ordering problem this precontract resolves)
+## 4. The 03/04 physical-schema question — status: SPEC_AMBIGUITY / PROPOSED_PHYSICAL_SCHEMA_CLARIFICATION
 
-SSOT §12.2's D-02 table nominally lists a "morphology" variable group, but §37 runs
-`03_representation_features` *before* `04_morphology_features` — so 03 cannot possibly compute
-Kiwi-derived ratios that don't exist yet. This is the same shape of problem G1_PAIR_REGISTRY_PRECONTRACT_v1.md
-§16.B already solved for the 01/02 boundary (nullable columns, backfilled by the later phase).
+**Classification correction (Vice Director, 2026-08-16): this is not a resolved ambiguity.** The
+previous revision of this section framed itself as "the ordering problem this precontract resolves"
+— that overstated it. SSOT §12.2's D-02 table lists a "morphology" variable group; this document
+does not reinterpret or delete that row, and does not treat the proposal below as an approved
+semantic change to §12.2. It records an open physical-schema question and a non-binding proposed
+direction, preserved so it can be raised as a `CHANGE_REQUEST` candidate later if the Research
+Director wants it settled formally.
 
-**Recommendation (engineering call, not yet Director-ratified — flag for confirmation, not a
-silent decision)**: do not replicate that nullable-column pattern here. Instead, D-02
-(`REP_FEATURES_v001.parquet`) simply never carries morphology columns; `morpheme_density`,
-`particle_ratio`, `ending_ratio`, `deriv_affix_ratio` live only in D-03
-(`MORPH_FEATURES_KIWI_v001.parquet`, produced by 04) and are joined on `pair_id` at analysis time
-(07/08, per the RQ traceability matrix already in `configs/research_v1.yaml`). Reasons this is
-preferred over the nullable-then-backfill pattern used for D-01: D-02 and D-03 are two genuinely
-independent artifacts with independent versioning (`REP_FEATURES_v001` vs `MORPH_FEATURES_KIWI_v001`)
-that never need to be the *same physical file* the way the D-01 registry does; forcing a
-nullable-then-mutated D-02 would create a spurious coupling between two notebooks that otherwise
-have zero dependency on each other's output. If the Research Director prefers the nullable pattern
-for schema-literalism reasons, swap this section for the D-01 §16.B pattern verbatim — the rest of
-this precontract is unaffected either way.
+**Operational boundary (unchanged, not itself in question)**: `03_representation_features.ipynb`
+does not compute morphology under either resolution of the question below —
+`04_morphology_features.ipynb` (D-03) remains the sole execution site for morphology measurement.
+§37 also runs `03` before `04`, so `03` cannot compute Kiwi-derived ratios that do not exist yet
+regardless of how the schema question is resolved.
+
+**Issue**: does §12.2's morphology group belong physically inside D-02
+(`REP_FEATURES_v001.parquet`) — following the nullable-then-backfilled pattern
+`G1_PAIR_REGISTRY_PRECONTRACT_v1.md` §16.B already used for the 01/02 boundary — or does it belong
+only in the separate D-03 artifact (`MORPH_FEATURES_KIWI_v001.parquet`, produced by 04), joined on
+`pair_id` at analysis time?
+
+**Proposed direction (engineering opinion only — NOT Director-ratified, NOT a decision)**: D-02
+never carries morphology columns; `morpheme_density`, `particle_ratio`, `ending_ratio`,
+`deriv_affix_ratio` live only in D-03 and are joined on `pair_id` at analysis time (07/08/09, per the
+RQ traceability matrix already in `configs/research_v1.yaml`).
+
+**Impact if this direction were taken**: D-02 and D-03 become two genuinely independent artifacts
+with independent versioning (`REP_FEATURES_v001` vs `MORPH_FEATURES_KIWI_v001`) that never need to
+be the *same physical file* the way the D-01 registry does, avoiding a spurious coupling between two
+notebooks that otherwise have zero dependency on each other's output.
+
+**Alternative**: replicate the D-01 §16.B nullable-then-backfill pattern instead — add morphology
+columns to D-02 as null until `04` backfills them. Keeps §12.2's grouping physically literal at the
+cost of coupling D-02's schema to D-04's execution timing.
+
+**Disposition**: unresolved. Neither option is adopted by this document. Implementers should treat
+"D-02 does not carry morphology columns" as provisional only, and should not cite this section as
+authority for a settled schema decision — that requires a `CHANGE_REQUEST` and Research Director
+approval.
 
 ## 5. Compositional feature handling (§21, binding at model-build time, not here)
 

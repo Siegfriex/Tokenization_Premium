@@ -9,9 +9,15 @@ G3). Track B (§26, gpt-oss serving / D-06) is explicitly out of scope for this 
 and Track B are never merged into the same columns (Decision D-03) and Track B is deferred
 non-blocking per this project's prior scoping ([[project_hardware_track_b_constraint]]).
 
-## 1. Preconditions before this notebook may run
+## 1. Preconditions
 
-G1 pass, plus this notebook additionally consumes `codepoint_count`/`utf8_bytes` from D-02
+Same distinction as NB03 §1: G1 OPEN does not block implementing this notebook's tokenizer-
+measurement code, its unit tests, or exercising it against synthetic/small-sample input — including
+the exact-decomposition computation sequence in §4 and the G2 identity check in §5, all of which can
+be validated on synthetic data now. G1 PASS (plus D-02 existing) is required only before a
+full-population run is promoted as evidentiary D-04.
+
+This notebook additionally consumes `codepoint_count`/`utf8_bytes` from D-02
 (NB03's output) to compute the decomposition — **not** a re-derivation of those quantities. If D-02
 is not yet built, this notebook can still measure raw token counts (`ko_token_count`,
 `en_token_count`, `token_premium`, `log_token_premium`) independently, but `CodePointRatio` and
