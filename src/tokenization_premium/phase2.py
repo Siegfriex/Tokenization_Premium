@@ -20,8 +20,10 @@ import duckdb
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from tokenization_premium.hashing import sha256_file
 from tokenization_premium.progress import ProgressHeartbeat
-from tokenization_premium.registry import provenance_pair_id, resolve_duckdb_memory_limit
+from tokenization_premium.registry import provenance_pair_id, resolve_duckdb_memory_limit, schema_fingerprint
+from tokenization_premium.schemas import pair_registry_schema
 
 P2_CONTRACT_COMMIT = "b9990afbf3fc0ed2a5e80fb4def1565e9ba3ebf4"
 P2_CONTRACT_GIT_OBJECT = f"{P2_CONTRACT_COMMIT}:docs/contracts/P2_NORMALIZE_QC_PRECONTRACT_v1.md"
@@ -35,6 +37,8 @@ LANGUAGE_MIN_EVIDENCE = 5
 LANGUAGE_SUBSTANTIAL_EVIDENCE = 5
 EXACT_DUPLICATE_IDENTITY_SCOPE = "EXACT_RAW_KO_EN_ONLY_NOT_NEAR_DUPLICATE_OR_PARAPHRASE"
 P2_OUTPUT_SCHEMA_VERSION = "PAIR_REGISTRY_v002"
+P2_COMPLETION_STATUS = "P2_CANONICAL_COMPLETE"
+P2_COMPLETION_MANIFEST_RELATIVE_PATH = Path("outputs/manifests/QC_MANIFEST_v001.json")
 P2_THREADS = 4
 P2_DUCKDB_MEMORY_LIMIT = "6GB"
 P2_NORMALIZATION_OPS_JSON = '["NFC","BOM_STRIP","OUTER_TRIM"]'
@@ -121,6 +125,93 @@ class Phase2PopulationResult:
     language_side_counts: Mapping[str, int]
     output_path: str
     validation_status: str
+
+
+@dataclass(frozen=True)
+class Phase2CanonicalEvidence:
+    """Verified canonical artifact evidence gated by the completion manifest."""
+
+    output_path: Path
+    output_sha256: str
+    row_count: int
+    schema_sha256: str
+    completion_manifest_path: Path
+
+
+@dataclass(frozen=True)
+class P2OutputFieldSpec:
+    """One executable output-field contract shared by SQL validation and reports."""
+
+    name: str
+    arrow_type: pa.DataType
+    physical_nullable: bool
+    required_non_null: bool
+    aggregate_count: bool = False
+
+
+_P2_BASE_REQUIRED_NON_NULL_OVERRIDES = {
+    "ko_text_nfc",
+    "en_text_nfc",
+    "ko_text_analysis",
+    "en_text_analysis",
+}
+
+
+def _base_output_field_specs() -> tuple[P2OutputFieldSpec, ...]:
+    return tuple(
+        P2OutputFieldSpec(
+            name=field.name,
+            arrow_type=field.type,
+            physical_nullable=True,
+            required_non_null=not field.nullable or field.name in _P2_BASE_REQUIRED_NON_NULL_OVERRIDES,
+        )
+        for field in pair_registry_schema()
+    )
+
+
+P2_OUTPUT_FIELD_SPECS = (
+    *_base_output_field_specs(),
+    P2OutputFieldSpec("normalization_rule_version", pa.string(), True, True),
+    P2OutputFieldSpec("normalization_ops", pa.string(), True, True),
+    P2OutputFieldSpec("unicode_anomaly_flag", pa.bool_(), True, True, True),
+    P2OutputFieldSpec("empty_text_flag", pa.bool_(), True, True, True),
+    P2OutputFieldSpec("markup_dominant_flag", pa.bool_(), True, True, True),
+    P2OutputFieldSpec("control_char_excess_flag", pa.bool_(), True, True, True),
+    P2OutputFieldSpec("decode_integrity_flag", pa.bool_(), True, True, True),
+    P2OutputFieldSpec("exact_duplicate_flag", pa.bool_(), True, True, True),
+    P2OutputFieldSpec("short_text_flag", pa.bool_(), True, True),
+    P2OutputFieldSpec("long_text_flag", pa.bool_(), True, True),
+    P2OutputFieldSpec("high_digit_ratio_flag", pa.bool_(), True, True, True),
+    P2OutputFieldSpec("high_punctuation_ratio_flag", pa.bool_(), True, True, True),
+    P2OutputFieldSpec("script_mix_flag", pa.bool_(), True, True, True),
+    P2OutputFieldSpec("translation_quality_review_flag", pa.bool_(), True, False),
+    P2OutputFieldSpec("lang_side_anomaly_review_flag", pa.bool_(), True, True, True),
+    P2OutputFieldSpec("lang_side_anomaly_reason", pa.string(), True, False),
+    P2OutputFieldSpec("ko_lang_side_anomaly_reason", pa.string(), True, True),
+    P2OutputFieldSpec("en_lang_side_anomaly_reason", pa.string(), True, True),
+    P2OutputFieldSpec("named_entity_heavy_flag", pa.bool_(), True, False),
+    P2OutputFieldSpec("named_entity_evaluation_status", pa.string(), True, True),
+    P2OutputFieldSpec("primary_rejection_reason", pa.string(), True, False),
+    P2OutputFieldSpec("secondary_rejection_flags", pa.string(), True, True),
+    P2OutputFieldSpec("analysis_representative_pair_id", pa.string(), True, True),
+    P2OutputFieldSpec("duplicate_disposition", pa.string(), True, True),
+    P2OutputFieldSpec("analysis_eligible_exact_dedup", pa.bool_(), True, True),
+    P2OutputFieldSpec("length_stratum", pa.string(), True, True),
+)
+P2_OUTPUT_SCHEMA = pa.schema(
+    [pa.field(spec.name, spec.arrow_type, nullable=spec.physical_nullable) for spec in P2_OUTPUT_FIELD_SPECS]
+)
+P2_REQUIRED_NON_NULL_FIELDS = tuple(spec.name for spec in P2_OUTPUT_FIELD_SPECS if spec.required_non_null)
+P2_AGGREGATE_COUNT_FIELDS = tuple(spec.name for spec in P2_OUTPUT_FIELD_SPECS if spec.aggregate_count)
+P2_DENOMINATOR_METRICS = (
+    "raw_record_denominator",
+    "exact_unique_content_denominator",
+    "primary_eligible_denominator",
+    "final_analysis_denominator",
+    "accepted",
+    "rejected",
+)
+P2_QC_FLOW_METRICS = (*P2_DENOMINATOR_METRICS, *P2_AGGREGATE_COUNT_FIELDS)
 
 
 class QCFlagComputer(Protocol):
@@ -579,6 +670,7 @@ def _population_sql(input_path: Path, output_partial_path: Path, original_column
                 __markup AS markup_dominant_flag,
                 __control AS control_char_excess_flag,
                 __decode AS decode_integrity_flag,
+                __exact_duplicate AS exact_duplicate_flag,
                 __length_quintile = 1 AS short_text_flag,
                 __length_quintile = 5 AS long_text_flag,
                 __high_digit AS high_digit_ratio_flag,
@@ -593,13 +685,13 @@ def _population_sql(input_path: Path, output_partial_path: Path, original_column
                 NULL::BOOLEAN AS named_entity_heavy_flag,
                 'DEFERRED' AS named_entity_evaluation_status,
                 __primary_rejection_reason AS primary_rejection_reason,
-                to_json(list_filter([
+                cast(to_json(list_filter([
                     CASE WHEN __empty AND __primary_rejection_reason <> 'empty_text_flag' THEN 'empty_text_flag' END,
                     CASE WHEN __decode AND __primary_rejection_reason <> 'decode_integrity_flag' THEN 'decode_integrity_flag' END,
                     CASE WHEN __markup AND __primary_rejection_reason <> 'markup_dominant_flag' THEN 'markup_dominant_flag' END,
                     CASE WHEN __control AND __primary_rejection_reason <> 'control_char_excess_flag' THEN 'control_char_excess_flag' END,
                     CASE WHEN __exact_duplicate AND __primary_rejection_reason <> 'exact_duplicate_flag' THEN 'exact_duplicate_flag' END
-                ], x -> x IS NOT NULL)) AS secondary_rejection_flags,
+                ], x -> x IS NOT NULL)) AS VARCHAR) AS secondary_rejection_flags,
                 __analysis_rep AS analysis_representative_pair_id,
                 CASE WHEN pair_id = __analysis_rep THEN 'REPRESENTATIVE'
                     ELSE 'NON_REPRESENTATIVE_DUPLICATE' END AS duplicate_disposition,
@@ -608,6 +700,253 @@ def _population_sql(input_path: Path, output_partial_path: Path, original_column
             FROM rejected
         ) TO {_sql_literal(output_partial_path)} (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 100000)
     """
+
+
+def validate_phase2_output_schema(path: Path) -> pa.Schema:
+    """Validate the complete ordered physical Parquet schema against the P2 field contract."""
+    observed = pq.ParquetFile(path).schema_arrow
+    differences: list[str] = []
+    if len(observed) != len(P2_OUTPUT_SCHEMA):
+        differences.append(f"field_count expected={len(P2_OUTPUT_SCHEMA)} observed={len(observed)}")
+    for index, (expected, actual) in enumerate(zip(P2_OUTPUT_SCHEMA, observed, strict=False)):
+        if expected.name != actual.name:
+            differences.append(f"field[{index}].name expected={expected.name!r} observed={actual.name!r}")
+        if expected.type != actual.type:
+            differences.append(f"field[{index}].type expected={expected.type} observed={actual.type}")
+        if expected.nullable != actual.nullable:
+            differences.append(
+                f"field[{index}].nullable expected={expected.nullable} observed={actual.nullable}"
+            )
+    if differences:
+        raise ValueError("v002 output schema contract failed: " + "; ".join(differences))
+    return observed
+
+
+def _validate_phase2_candidate(
+    connection: duckdb.DuckDBPyConnection,
+    *,
+    input_path: Path,
+    candidate_path: Path,
+    expected_row_count: int,
+) -> pa.Schema:
+    observed_schema = validate_phase2_output_schema(candidate_path)
+    input_literal = _sql_literal(input_path)
+    candidate_literal = _sql_literal(candidate_path)
+    row_count, pair_distinct = _fetchone_required(
+        connection.execute(f"SELECT count(*), count(DISTINCT pair_id) FROM read_parquet({candidate_literal})")
+    )
+    if int(row_count) != expected_row_count or int(pair_distinct) != expected_row_count:
+        raise ValueError("v002 row or pair_id cardinality validation failed")
+    raw_differences = _fetchone_required(
+        connection.execute(
+            f"""
+            SELECT count(*) FROM read_parquet({input_literal}) i
+            JOIN read_parquet({candidate_literal}) o USING (pair_id)
+            WHERE i.ko_text_raw IS DISTINCT FROM o.ko_text_raw
+               OR i.en_text_raw IS DISTINCT FROM o.en_text_raw
+               OR i.raw_locator IS DISTINCT FROM o.raw_locator
+               OR i.raw_file_sha256 IS DISTINCT FROM o.raw_file_sha256
+            """
+        )
+    )[0]
+    if int(raw_differences) != 0:
+        raise ValueError("v002 raw immutability validation failed")
+    required_null_predicate = " OR ".join(f'"{name}" IS NULL' for name in P2_REQUIRED_NON_NULL_FIELDS)
+    required_nulls = _fetchone_required(
+        connection.execute(
+            f"SELECT count(*) FROM read_parquet({candidate_literal}) WHERE {required_null_predicate}"
+        )
+    )[0]
+    if int(required_nulls) != 0:
+        raise ValueError("v002 required non-null field invariant failed")
+    exact_duplicate_nulls, exact_duplicate_mismatches = _fetchone_required(
+        connection.execute(
+            f"""
+            SELECT
+                count(*) FILTER (WHERE exact_duplicate_flag IS NULL),
+                count(*) FILTER (
+                    WHERE exact_duplicate_flag IS DISTINCT FROM
+                        (pair_id <> analysis_representative_pair_id)
+                )
+            FROM read_parquet({candidate_literal})
+            """
+        )
+    )
+    if int(exact_duplicate_nulls) != 0:
+        raise ValueError("v002 exact_duplicate_flag non-null invariant failed")
+    if int(exact_duplicate_mismatches) != 0:
+        raise ValueError("v002 exact_duplicate_flag survivor equality invariant failed")
+    invalid_statuses = _fetchone_required(
+        connection.execute(
+            f"""
+            SELECT count(*) FROM read_parquet({candidate_literal})
+            WHERE pair_quality_status NOT IN ('accepted', 'rejected')
+               OR qc_stage_status <> 'PHASE2_COMPLETE'
+            """
+        )
+    )[0]
+    if int(invalid_statuses) != 0:
+        raise ValueError("v002 Phase-2 status invariant failed")
+    return observed_schema
+
+
+def _collect_phase2_aggregates(
+    connection: duckdb.DuckDBPyConnection,
+    *,
+    candidate_path: Path,
+) -> tuple[dict[str, int], dict[str, int], list[tuple[Any, ...]]]:
+    relation = f"read_parquet({_sql_literal(candidate_path)})"
+    aggregates = ", ".join(
+        f'count(*) FILTER (WHERE "{name}")' for name in P2_AGGREGATE_COUNT_FIELDS
+    )
+    values = _fetchone_required(
+        connection.execute(
+            f"""
+            SELECT count(*), count(DISTINCT duplicate_group_id),
+                   count(*) FILTER (WHERE logical_corpus IN ('025','026')),
+                   count(*) FILTER (WHERE logical_corpus IN ('025','026')
+                       AND analysis_eligible_exact_dedup AND pair_quality_status='accepted'),
+                   count(*) FILTER (WHERE pair_quality_status='accepted'),
+                   count(*) FILTER (WHERE pair_quality_status='rejected'),
+                   {aggregates}
+            FROM {relation}
+            """
+        )
+    )
+    qc_counts = {
+        name: int(value) for name, value in zip(P2_QC_FLOW_METRICS, values, strict=True)
+    }
+    language_rows = connection.execute(
+        f"""
+        SELECT side, reason, count
+        FROM (
+            SELECT 'KO' AS side, ko_lang_side_anomaly_reason AS reason, count(*) AS count
+            FROM {relation} GROUP BY reason
+            UNION ALL
+            SELECT 'EN' AS side, en_lang_side_anomaly_reason AS reason, count(*) AS count
+            FROM {relation} GROUP BY reason
+        ) ORDER BY side, reason
+        """
+    ).fetchall()
+    language_counts = {f"{side}:{reason}": int(count) for side, reason, count in language_rows}
+    sampling_rows = connection.execute(
+        f"""
+        SELECT source_id, domain, translation_direction, length_stratum, count(*) AS eligible_count
+        FROM {relation}
+        WHERE logical_corpus IN ('025','026')
+          AND analysis_eligible_exact_dedup
+          AND pair_quality_status='accepted'
+        GROUP BY source_id, domain, translation_direction, length_stratum
+        ORDER BY source_id, domain, translation_direction, length_stratum
+        """
+    ).fetchall()
+    return qc_counts, language_counts, sampling_rows
+
+
+def _read_csv_rows(path: Path, expected_fields: Sequence[str]) -> list[dict[str, str]]:
+    with path.open("r", encoding="utf-8", newline="") as stream:
+        reader = csv.DictReader(stream)
+        if reader.fieldnames != list(expected_fields):
+            raise ValueError(
+                f"candidate report columns differ: path={path} expected={list(expected_fields)} observed={reader.fieldnames}"
+            )
+        return list(reader)
+
+
+def _validate_candidate_reports(
+    report_paths: Mapping[str, Path],
+    *,
+    expected_row_count: int,
+    run_id: str,
+    output_sha256: str,
+) -> None:
+    qc_rows = _read_csv_rows(
+        report_paths["outputs/reports/QC_FLOW_v001.csv"],
+        ["metric", "count", "denominator", "rate", "interpretation"],
+    )
+    if [row["metric"] for row in qc_rows] != list(P2_QC_FLOW_METRICS):
+        raise ValueError("QC flow metric order differs from the output field contract")
+    qc_by_metric = {row["metric"]: int(row["count"]) for row in qc_rows}
+    if qc_by_metric["raw_record_denominator"] != expected_row_count:
+        raise ValueError("QC flow raw denominator differs from the validated candidate")
+    if qc_by_metric["accepted"] + qc_by_metric["rejected"] != expected_row_count:
+        raise ValueError("QC flow accepted/rejected counts do not close to the candidate population")
+    lid_rows = _read_csv_rows(
+        report_paths["outputs/reports/LID_QC_PASS_RATE_v001.csv"],
+        ["report_scope", "side", "reason_category", "count", "denominator", "rate", "disposition"],
+    )
+    for side in ("KO", "EN"):
+        if sum(int(row["count"]) for row in lid_rows if row["side"] == side) != expected_row_count:
+            raise ValueError(f"language-side report does not close for side={side}")
+    _read_csv_rows(
+        report_paths["outputs/reports/MANUAL_QC_SAMPLING_FRAME_SUMMARY_v001.csv"],
+        ["source_id", "domain", "translation_direction", "length_stratum", "eligible_count"],
+    )
+    execution_report = json.loads(
+        report_paths["outputs/reports/P2_EXECUTION_REPORT_v001.json"].read_text(encoding="utf-8")
+    )
+    if (
+        execution_report.get("artifact_id") != "P2_EXECUTION_REPORT_v001"
+        or execution_report.get("run_id") != run_id
+        or execution_report.get("output_sha256") != output_sha256
+        or execution_report.get("validation_status") != "PASS"
+    ):
+        raise ValueError("candidate execution report validation failed")
+
+
+def require_phase2_canonical_evidence(
+    project_root: Path,
+    *,
+    output_path: Path | None = None,
+    manifest_path: Path | None = None,
+) -> Phase2CanonicalEvidence:
+    """Reject a canonical filename unless a complete manifest verifies artifact and report bytes."""
+    project_root = project_root.resolve()
+    manifest_path = manifest_path or project_root / P2_COMPLETION_MANIFEST_RELATIVE_PATH
+    if not manifest_path.is_file():
+        raise FileNotFoundError("P2 completion manifest is required before v002 is canonical evidence")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if (
+        manifest.get("artifact_id") != "QC_MANIFEST_v001"
+        or manifest.get("completion_status") != P2_COMPLETION_STATUS
+        or manifest.get("validation_status") != "PASS"
+    ):
+        raise ValueError("P2 completion manifest is not successful")
+    output = manifest.get("output")
+    reports = manifest.get("reports")
+    if not isinstance(output, Mapping) or not isinstance(reports, list):
+        raise ValueError("P2 completion manifest artifact inventory is invalid")
+    recorded_path = project_root / str(output["path"])
+    canonical_path = (output_path or recorded_path).resolve()
+    if canonical_path != recorded_path.resolve() or not canonical_path.is_relative_to(project_root):
+        raise ValueError("P2 completion manifest output path does not match the requested canonical artifact")
+    observed_schema = validate_phase2_output_schema(canonical_path)
+    parquet = pq.ParquetFile(canonical_path)
+    if parquet.metadata.num_rows != int(output["row_count"]):
+        raise ValueError("P2 canonical artifact row count differs from the completion manifest")
+    if len(observed_schema) != int(output["column_count"]):
+        raise ValueError("P2 canonical artifact column count differs from the completion manifest")
+    output_sha256 = sha256_file(canonical_path)
+    if output_sha256 != output.get("sha256"):
+        raise ValueError("P2 canonical artifact hash differs from the completion manifest")
+    schema_sha256 = schema_fingerprint(observed_schema)
+    if schema_sha256 != output.get("schema_sha256"):
+        raise ValueError("P2 canonical artifact schema hash differs from the completion manifest")
+    for report in reports:
+        if not isinstance(report, Mapping):
+            raise ValueError("P2 completion report inventory entry is invalid")
+        report_path = (project_root / str(report["path"])).resolve()
+        if not report_path.is_relative_to(project_root) or not report_path.is_file():
+            raise ValueError("P2 completion report path is missing or outside the project root")
+        if sha256_file(report_path) != report.get("sha256"):
+            raise ValueError("P2 completion report hash differs from the manifest")
+    return Phase2CanonicalEvidence(
+        output_path=canonical_path,
+        output_sha256=output_sha256,
+        row_count=parquet.metadata.num_rows,
+        schema_sha256=schema_sha256,
+        completion_manifest_path=manifest_path,
+    )
 
 
 def execute_phase2_population(
@@ -620,14 +959,61 @@ def execute_phase2_population(
     runtime_dir: Path,
     run_id: str,
 ) -> Phase2PopulationResult:
-    """Execute the authorized population QC once, fail-closed, with safe evidence only."""
-    output_partial = output_path.with_suffix(output_path.suffix + ".partial")
-    if output_path.exists() or output_partial.exists():
-        raise FileExistsError("canonical v002 or its partial already exists; automatic restart is forbidden")
+    """Execute the frozen full population with the production row-count contract."""
+    return _execute_phase2_population(
+        project_root=project_root,
+        input_path=input_path,
+        output_path=output_path,
+        d01_manifest_path=d01_manifest_path,
+        contract_path=contract_path,
+        runtime_dir=runtime_dir,
+        run_id=run_id,
+        expected_row_count=EXPECTED_D01_ROW_COUNT,
+        execution_code_commit_override=None,
+    )
+
+
+def _execute_phase2_population(
+    *,
+    project_root: Path,
+    input_path: Path,
+    output_path: Path,
+    d01_manifest_path: Path,
+    contract_path: Path,
+    runtime_dir: Path,
+    run_id: str,
+    expected_row_count: int,
+    execution_code_commit_override: str | None,
+) -> Phase2PopulationResult:
+    """Execute the same production path with an explicit row-count seam for synthetic E2E tests."""
+    output_candidate = output_path.with_suffix(output_path.suffix + ".candidate")
+    legacy_partial = output_path.with_suffix(output_path.suffix + ".partial")
+    completion_manifest_path = project_root / P2_COMPLETION_MANIFEST_RELATIVE_PATH
+    final_report_paths = {
+        "outputs/reports/QC_FLOW_v001.csv": project_root / "outputs/reports/QC_FLOW_v001.csv",
+        "outputs/reports/LID_QC_PASS_RATE_v001.csv": project_root / "outputs/reports/LID_QC_PASS_RATE_v001.csv",
+        "outputs/reports/MANUAL_QC_SAMPLING_FRAME_SUMMARY_v001.csv": project_root
+        / "outputs/reports/MANUAL_QC_SAMPLING_FRAME_SUMMARY_v001.csv",
+        "outputs/reports/P2_EXECUTION_REPORT_v001.json": project_root
+        / "outputs/reports/P2_EXECUTION_REPORT_v001.json",
+    }
+    protected_paths = (
+        output_path,
+        output_candidate,
+        legacy_partial,
+        completion_manifest_path,
+        *final_report_paths.values(),
+    )
+    existing = [str(path) for path in protected_paths if path.exists()]
+    if existing:
+        raise FileExistsError(
+            "canonical, candidate, report, or completion artifact already exists; automatic restart is forbidden: "
+            + ", ".join(existing)
+        )
     manifest = json.loads(d01_manifest_path.read_text(encoding="utf-8"))
     expected_sha = str(manifest["pair_registry"]["sha256"])
     expected_rows = int(manifest["pair_registry"]["row_count"])
-    if expected_rows != EXPECTED_D01_ROW_COUNT:
+    if expected_rows != expected_row_count:
         raise ValueError("D-01 manifest row count differs from the frozen population")
 
     start = dt.datetime.now(tz=_KST)
@@ -636,6 +1022,14 @@ def execute_phase2_population(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     runtime_dir.mkdir(parents=True, exist_ok=True)
     progress_dir = runtime_dir.parent / "progress"
+    candidate_report_dir = runtime_dir / "candidate-reports" / run_id
+    if candidate_report_dir.exists():
+        raise FileExistsError(f"candidate report directory already exists: {candidate_report_dir}")
+    candidate_report_dir.mkdir(parents=True)
+    candidate_report_paths = {
+        relative_path: candidate_report_dir / Path(relative_path).name
+        for relative_path in final_report_paths
+    }
     with ProgressHeartbeat(
         run_id=run_id,
         phase="P2",
@@ -651,126 +1045,51 @@ def execute_phase2_population(
 
         original_columns = pq.ParquetFile(input_path).schema_arrow.names
         stage_started = time.monotonic()
-        heartbeat.set_stage("POPULATION_TRANSFORM_WRITE", total=EXPECTED_D01_ROW_COUNT)
+        heartbeat.set_stage("POPULATION_TRANSFORM_WRITE", total=expected_row_count)
         connection = open_phase2_duckdb(runtime_dir / "duckdb-spill", {"TOKENIZATION_PREMIUM_DUCKDB_MEMORY_LIMIT": P2_DUCKDB_MEMORY_LIMIT})
         try:
             connection.execute(f"SET threads = {P2_THREADS}")
-            connection.execute(_population_sql(input_path, output_partial, original_columns))
+            connection.execute(_population_sql(input_path, output_candidate, original_columns))
         finally:
             connection.close()
-        heartbeat.update(EXPECTED_D01_ROW_COUNT)
-        heartbeat.checkpoint("V002_PARTIAL_WRITTEN", rows=EXPECTED_D01_ROW_COUNT)
+        heartbeat.update(expected_row_count)
+        heartbeat.checkpoint("V002_CANDIDATE_WRITTEN", rows=expected_row_count)
         stage_durations["population_transform_write"] = round(time.monotonic() - stage_started, 3)
 
         stage_started = time.monotonic()
-        heartbeat.set_stage("V002_VALIDATION", total=EXPECTED_D01_ROW_COUNT)
+        heartbeat.set_stage("V002_CANDIDATE_VALIDATION", total=expected_row_count)
         connection = open_phase2_duckdb(runtime_dir / "duckdb-spill-validation", {"TOKENIZATION_PREMIUM_DUCKDB_MEMORY_LIMIT": P2_DUCKDB_MEMORY_LIMIT})
         try:
             connection.execute(f"SET threads = {P2_THREADS}")
-            input_literal = _sql_literal(input_path)
-            output_literal = _sql_literal(output_partial)
-            row_count, pair_distinct = _fetchone_required(connection.execute(
-                f"SELECT count(*), count(DISTINCT pair_id) FROM read_parquet({output_literal})"
-            ))
-            if int(row_count) != EXPECTED_D01_ROW_COUNT or int(pair_distinct) != EXPECTED_D01_ROW_COUNT:
-                raise ValueError("v002 row or pair_id cardinality validation failed")
-            raw_differences = _fetchone_required(connection.execute(
-                f"""
-                SELECT count(*) FROM read_parquet({input_literal}) i
-                JOIN read_parquet({output_literal}) o USING (pair_id)
-                WHERE i.ko_text_raw IS DISTINCT FROM o.ko_text_raw
-                   OR i.en_text_raw IS DISTINCT FROM o.en_text_raw
-                   OR i.raw_locator IS DISTINCT FROM o.raw_locator
-                   OR i.raw_file_sha256 IS DISTINCT FROM o.raw_file_sha256
-                """
-            ))[0]
-            if int(raw_differences) != 0:
-                raise ValueError("v002 raw immutability validation failed")
-            null_required = _fetchone_required(connection.execute(
-                f"""
-                SELECT count(*) FROM read_parquet({output_literal})
-                WHERE ko_text_nfc IS NULL OR en_text_nfc IS NULL
-                   OR ko_text_analysis IS NULL OR en_text_analysis IS NULL
-                   OR analysis_representative_pair_id IS NULL
-                   OR pair_quality_status NOT IN ('accepted', 'rejected')
-                   OR qc_stage_status <> 'PHASE2_COMPLETE'
-                """
-            ))[0]
-            if int(null_required) != 0:
-                raise ValueError("v002 required Phase-2 fields validation failed")
+            observed_schema = _validate_phase2_candidate(
+                connection,
+                input_path=input_path,
+                candidate_path=output_candidate,
+                expected_row_count=expected_row_count,
+            )
         finally:
             connection.close()
-        heartbeat.update(EXPECTED_D01_ROW_COUNT)
-        heartbeat.checkpoint("V002_VALIDATED", rows=EXPECTED_D01_ROW_COUNT)
-        os.replace(output_partial, output_path)
-        stage_durations["v002_validation"] = round(time.monotonic() - stage_started, 3)
+        heartbeat.update(expected_row_count)
+        heartbeat.checkpoint("V002_CANDIDATE_VALIDATED", rows=expected_row_count)
+        stage_durations["v002_candidate_validation"] = round(time.monotonic() - stage_started, 3)
 
         stage_started = time.monotonic()
-        heartbeat.set_stage("V002_SHA256", total=output_path.stat().st_size)
-        output_sha = _sha256_file(output_path, heartbeat=heartbeat)
-        stage_durations["v002_sha256"] = round(time.monotonic() - stage_started, 3)
-        heartbeat.checkpoint("V002_SHA256_COMPLETE", verified=1)
+        heartbeat.set_stage("V002_CANDIDATE_SHA256", total=output_candidate.stat().st_size)
+        output_sha = _sha256_file(output_candidate, heartbeat=heartbeat)
+        stage_durations["v002_candidate_sha256"] = round(time.monotonic() - stage_started, 3)
+        heartbeat.checkpoint("V002_CANDIDATE_SHA256_COMPLETE", verified=1)
 
         stage_started = time.monotonic()
         heartbeat.set_stage("SAFE_AGGREGATE_REPORTS", total=None)
         connection = open_phase2_duckdb(runtime_dir / "duckdb-spill-reporting", {"TOKENIZATION_PREMIUM_DUCKDB_MEMORY_LIMIT": P2_DUCKDB_MEMORY_LIMIT})
         try:
             connection.execute(f"SET threads = {P2_THREADS}")
-            relation = f"read_parquet({_sql_literal(output_path)})"
-            count_names = [
-                "empty_text_flag", "decode_integrity_flag", "markup_dominant_flag",
-                "control_char_excess_flag", "exact_duplicate_flag", "unicode_anomaly_flag",
-                "high_digit_ratio_flag", "high_punctuation_ratio_flag", "script_mix_flag",
-                "lang_side_anomaly_review_flag",
-            ]
-            aggregates = ", ".join(f"count(*) FILTER (WHERE {name})" for name in count_names)
-            values = _fetchone_required(connection.execute(
-                f"""
-                SELECT count(*), count(DISTINCT duplicate_group_id),
-                       count(*) FILTER (WHERE logical_corpus IN ('025','026')),
-                       count(*) FILTER (WHERE logical_corpus IN ('025','026')
-                           AND analysis_eligible_exact_dedup AND pair_quality_status='accepted'),
-                       count(*) FILTER (WHERE pair_quality_status='accepted'),
-                       count(*) FILTER (WHERE pair_quality_status='rejected'),
-                       {aggregates}
-                FROM {relation}
-                """
-            ))
-            metric_names = [
-                "raw_record_denominator", "exact_unique_content_denominator",
-                "primary_eligible_denominator", "final_analysis_denominator",
-                "accepted", "rejected", *count_names,
-            ]
-            qc_counts = {name: int(value) for name, value in zip(metric_names, values, strict=True)}
-            language_rows = connection.execute(
-                f"""
-                SELECT side, reason, count
-                FROM (
-                    SELECT 'KO' AS side, ko_lang_side_anomaly_reason AS reason, count(*) AS count
-                    FROM {relation} GROUP BY reason
-                    UNION ALL
-                    SELECT 'EN' AS side, en_lang_side_anomaly_reason AS reason, count(*) AS count
-                    FROM {relation} GROUP BY reason
-                ) ORDER BY side, reason
-                """
-            ).fetchall()
-            language_counts = {f"{side}:{reason}": int(count) for side, reason, count in language_rows}
-            sampling_rows = connection.execute(
-                f"""
-                SELECT source_id, domain, translation_direction, length_stratum, count(*) AS eligible_count
-                FROM {relation}
-                WHERE logical_corpus IN ('025','026')
-                  AND analysis_eligible_exact_dedup
-                  AND pair_quality_status='accepted'
-                GROUP BY source_id, domain, translation_direction, length_stratum
-                ORDER BY source_id, domain, translation_direction, length_stratum
-                """
-            ).fetchall()
+            qc_counts, language_counts, sampling_rows = _collect_phase2_aggregates(
+                connection, candidate_path=output_candidate
+            )
         finally:
             connection.close()
 
-        reports_dir = project_root / "outputs/reports"
-        manifests_dir = project_root / "outputs/manifests"
         qc_flow_rows: list[dict[str, object]] = []
         for name, count in qc_counts.items():
             denominator = qc_counts["raw_record_denominator"]
@@ -784,7 +1103,7 @@ def execute_phase2_population(
                 }
             )
         _atomic_csv(
-            reports_dir / "QC_FLOW_v001.csv",
+            candidate_report_paths["outputs/reports/QC_FLOW_v001.csv"],
             ["metric", "count", "denominator", "rate", "interpretation"],
             qc_flow_rows,
         )
@@ -794,19 +1113,21 @@ def execute_phase2_population(
                 "side": key.split(":", 1)[0],
                 "reason_category": key.split(":", 1)[1],
                 "count": value,
-                "denominator": EXPECTED_D01_ROW_COUNT,
-                "rate": round(value / EXPECTED_D01_ROW_COUNT, 12),
+                "denominator": expected_row_count,
+                "rate": round(value / expected_row_count, 12),
                 "disposition": "review_only_not_automatic_rejection",
             }
             for key, value in sorted(language_counts.items())
         ]
         _atomic_csv(
-            reports_dir / "LID_QC_PASS_RATE_v001.csv",
+            candidate_report_paths["outputs/reports/LID_QC_PASS_RATE_v001.csv"],
             ["report_scope", "side", "reason_category", "count", "denominator", "rate", "disposition"],
             lid_rows,
         )
         _atomic_csv(
-            reports_dir / "MANUAL_QC_SAMPLING_FRAME_SUMMARY_v001.csv",
+            candidate_report_paths[
+                "outputs/reports/MANUAL_QC_SAMPLING_FRAME_SUMMARY_v001.csv"
+            ],
             ["source_id", "domain", "translation_direction", "length_stratum", "eligible_count"],
             [
                 {
@@ -816,72 +1137,134 @@ def execute_phase2_population(
                 for row in sampling_rows
             ],
         )
-        heartbeat.checkpoint("SAFE_REPORTS_WRITTEN", reports=3)
         stage_durations["safe_aggregate_reports"] = round(time.monotonic() - stage_started, 3)
+        heartbeat.checkpoint("SAFE_REPORT_CANDIDATES_WRITTEN", reports=3)
 
-    progress_jsonl = progress_dir / run_id / "progress.jsonl"
-    snapshots = [json.loads(line) for line in progress_jsonl.read_text(encoding="utf-8").splitlines()]
-    peak_rss = max(float(snapshot["rss_gib"]) for snapshot in snapshots)
-    minimum_available = min(float(snapshot["mem_available_gib"]) for snapshot in snapshots)
-    end = dt.datetime.now(tz=_KST)
-    execution_code_commit = _git_head(project_root)
-    contract_sha = hashlib.sha256(contract_path.read_bytes()).hexdigest()
-    output_columns = len(pq.ParquetFile(output_path).schema_arrow.names)
-    manifest_payload: dict[str, object] = {
-        "artifact_id": "QC_MANIFEST_v001",
-        "input": {"path": str(input_path.relative_to(project_root)), "sha256": input_sha},
-        "output": {
-            "path": str(output_path.relative_to(project_root)), "sha256": output_sha,
-            "row_count": EXPECTED_D01_ROW_COUNT, "column_count": output_columns,
-            "schema_version": P2_OUTPUT_SCHEMA_VERSION,
-        },
-        "contract": {"path": str(contract_path.relative_to(project_root)), "sha256": contract_sha,
-                     "git_commit": P2_CONTRACT_COMMIT},
-        "execution_code_commit": execution_code_commit,
-        "runtime": {
-            "duckdb_memory_limit": P2_DUCKDB_MEMORY_LIMIT, "threads": P2_THREADS,
-            "spill_directory": str((runtime_dir / "duckdb-spill").relative_to(project_root)),
-            "heartbeat_interval_sec": 10,
-        },
-        "resource_observation": {"peak_rss_gib": peak_rss, "minimum_available_memory_gib": minimum_available},
-        "start_kst": start.isoformat(timespec="seconds"),
-        "end_kst": end.isoformat(timespec="seconds"),
-        "validation_status": "PASS",
-        "manual_audit_status": "LOGISTICS_PENDING_SAMPLE_NOT_DRAWN",
-        "language_side_note": "LID historical filename means language-side sanity / SSOT traceability, not model-based language identification",
-        "stage_durations_sec": stage_durations,
-    }
-    _atomic_json(manifests_dir / "QC_MANIFEST_v001.json", manifest_payload)
-    execution_report: dict[str, object] = {
-        "artifact_id": "P2_EXECUTION_REPORT_v001",
-        "run_id": run_id,
-        "start_kst": start.isoformat(timespec="seconds"), "end_kst": end.isoformat(timespec="seconds"),
-        "stage_durations_sec": stage_durations,
-        "resource_observation": manifest_payload["resource_observation"],
-        "qc_counts": qc_counts,
-        "language_side_counts": language_counts,
-        "normalization": {
-            "rule_version": NORMALIZATION_RULE_VERSION,
-            "operations": list(NORMALIZATION_OPERATIONS),
-            "raw_columns_immutable": True,
-            "internal_whitespace_preserved": True,
-            "internal_u_fe_ff_observable": True,
-        },
-        "exact_duplicate_disposition": {
-            "provenance_pointer_unchanged": True,
-            "analysis_survivor_field": "analysis_representative_pair_id",
-            "near_duplicate_claim": False,
-        },
-        "input_sha256": input_sha, "output_sha256": output_sha,
-        "validation_status": "PASS",
-        "manual_audit_status": "LOGISTICS_PENDING_SAMPLE_NOT_DRAWN",
-    }
-    _atomic_json(reports_dir / "P2_EXECUTION_REPORT_v001.json", execution_report)
+        progress_jsonl = progress_dir / run_id / "progress.jsonl"
+        snapshots = [
+            json.loads(line) for line in progress_jsonl.read_text(encoding="utf-8").splitlines()
+        ]
+        peak_rss = max(float(snapshot["rss_gib"]) for snapshot in snapshots)
+        minimum_available = min(float(snapshot["mem_available_gib"]) for snapshot in snapshots)
+        prepared_at = dt.datetime.now(tz=_KST)
+        execution_code_commit = execution_code_commit_override or _git_head(project_root)
+        contract_sha = hashlib.sha256(contract_path.read_bytes()).hexdigest()
+        output_columns = len(observed_schema)
+        resource_observation = {
+            "peak_rss_gib": peak_rss,
+            "minimum_available_memory_gib": minimum_available,
+        }
+        execution_report: dict[str, object] = {
+            "artifact_id": "P2_EXECUTION_REPORT_v001",
+            "run_id": run_id,
+            "start_kst": start.isoformat(timespec="seconds"),
+            "prepared_at_kst": prepared_at.isoformat(timespec="seconds"),
+            "stage_durations_sec": dict(stage_durations),
+            "resource_observation": resource_observation,
+            "qc_counts": qc_counts,
+            "language_side_counts": language_counts,
+            "normalization": {
+                "rule_version": NORMALIZATION_RULE_VERSION,
+                "operations": list(NORMALIZATION_OPERATIONS),
+                "raw_columns_immutable": True,
+                "internal_whitespace_preserved": True,
+                "internal_u_fe_ff_observable": True,
+            },
+            "exact_duplicate_disposition": {
+                "provenance_pointer_unchanged": True,
+                "analysis_survivor_field": "analysis_representative_pair_id",
+                "exact_duplicate_rule": "pair_id != analysis_representative_pair_id",
+                "near_duplicate_claim": False,
+            },
+            "input_sha256": input_sha,
+            "output_sha256": output_sha,
+            "validation_status": "PASS",
+            "canonical_evidence_requires_completion_manifest": True,
+            "manual_audit_status": "LOGISTICS_PENDING_SAMPLE_NOT_DRAWN",
+        }
+        _atomic_json(
+            candidate_report_paths["outputs/reports/P2_EXECUTION_REPORT_v001.json"],
+            execution_report,
+        )
+
+        stage_started = time.monotonic()
+        heartbeat.set_stage("CANDIDATE_REPORT_VALIDATION", total=len(candidate_report_paths))
+        _validate_candidate_reports(
+            candidate_report_paths,
+            expected_row_count=expected_row_count,
+            run_id=run_id,
+            output_sha256=output_sha,
+        )
+        heartbeat.update(len(candidate_report_paths))
+        heartbeat.checkpoint("CANDIDATE_REPORTS_VALIDATED", reports=len(candidate_report_paths))
+        stage_durations["candidate_report_validation"] = round(
+            time.monotonic() - stage_started, 3
+        )
+        report_inventory = [
+            {
+                "path": relative_path,
+                "sha256": sha256_file(candidate_report_paths[relative_path]),
+            }
+            for relative_path in final_report_paths
+        ]
+
+        manifest_payload: dict[str, object] = {
+            "artifact_id": "QC_MANIFEST_v001",
+            "completion_status": P2_COMPLETION_STATUS,
+            "run_id": run_id,
+            "input": {"path": str(input_path.relative_to(project_root)), "sha256": input_sha},
+            "output": {
+                "path": str(output_path.relative_to(project_root)),
+                "sha256": output_sha,
+                "row_count": expected_row_count,
+                "column_count": output_columns,
+                "schema_version": P2_OUTPUT_SCHEMA_VERSION,
+                "schema_sha256": schema_fingerprint(observed_schema),
+            },
+            "reports": report_inventory,
+            "contract": {
+                "path": str(contract_path.relative_to(project_root)),
+                "sha256": contract_sha,
+                "git_commit": P2_CONTRACT_COMMIT,
+            },
+            "execution_code_commit": execution_code_commit,
+            "runtime": {
+                "duckdb_memory_limit": P2_DUCKDB_MEMORY_LIMIT,
+                "threads": P2_THREADS,
+                "spill_directory": str((runtime_dir / "duckdb-spill").relative_to(project_root)),
+                "heartbeat_interval_sec": 10,
+            },
+            "resource_observation": resource_observation,
+            "start_kst": start.isoformat(timespec="seconds"),
+            "validation_status": "PASS",
+            "manual_audit_status": "LOGISTICS_PENDING_SAMPLE_NOT_DRAWN",
+            "language_side_note": "LID historical filename means language-side sanity / SSOT traceability, not model-based language identification",
+        }
+
+        stage_started = time.monotonic()
+        heartbeat.set_stage("CANONICAL_PROMOTION", total=1 + len(candidate_report_paths))
+        os.replace(output_candidate, output_path)
+        heartbeat.update(1)
+        for relative_path, final_path in final_report_paths.items():
+            final_path.parent.mkdir(parents=True, exist_ok=True)
+            os.replace(candidate_report_paths[relative_path], final_path)
+            heartbeat.update(1)
+        stage_durations["canonical_promotion"] = round(time.monotonic() - stage_started, 3)
+        heartbeat.checkpoint("CANONICAL_ARTIFACTS_PROMOTED", artifacts=1 + len(candidate_report_paths))
+
+        completion_end = dt.datetime.now(tz=_KST)
+        manifest_payload["end_kst"] = completion_end.isoformat(timespec="seconds")
+        manifest_payload["stage_durations_sec"] = dict(stage_durations)
+        heartbeat.set_stage("COMPLETION_MANIFEST", total=1)
+        _atomic_json(completion_manifest_path, manifest_payload)
+        heartbeat.update(1)
+        heartbeat.checkpoint("P2_COMPLETION_MANIFEST_WRITTEN", manifests=1)
+
     return Phase2PopulationResult(
         run_id=run_id, input_sha256=input_sha, output_sha256=output_sha,
-        row_count=EXPECTED_D01_ROW_COUNT, output_column_count=output_columns,
+        row_count=expected_row_count, output_column_count=output_columns,
         execution_code_commit=execution_code_commit,
-        start_kst=start.isoformat(timespec="seconds"), end_kst=end.isoformat(timespec="seconds"),
+        start_kst=start.isoformat(timespec="seconds"), end_kst=completion_end.isoformat(timespec="seconds"),
         peak_rss_gib=peak_rss, minimum_available_memory_gib=minimum_available,
         stage_durations_sec=stage_durations, qc_counts=qc_counts,
         language_side_counts=language_counts,
@@ -897,14 +1280,18 @@ __all__ = [
     "LANGUAGE_SUBSTANTIAL_EVIDENCE",
     "NORMALIZATION_OPERATIONS",
     "NORMALIZATION_RULE_VERSION",
+    "P2_AGGREGATE_COUNT_FIELDS",
+    "P2_COMPLETION_STATUS",
     "P2_CONTRACT_COMMIT",
     "P2_CONTRACT_GIT_OBJECT",
     "P2_DUCKDB_MEMORY_LIMIT",
+    "P2_OUTPUT_SCHEMA",
     "P2_OUTPUT_SCHEMA_VERSION",
     "P2_THREADS",
     "PAIR_REGISTRY_V001_RELATIVE_PATH",
     "PAIR_REGISTRY_V002_RELATIVE_PATH",
     "AtomicParquetWriteResult",
+    "Phase2CanonicalEvidence",
     "Phase2PopulationResult",
     "AuditSummaryBuilder",
     "D01HandoffSummary",
@@ -924,8 +1311,10 @@ __all__ = [
     "named_entity_deferred_fields",
     "normalize_ssot_text",
     "open_phase2_duckdb",
+    "require_phase2_canonical_evidence",
     "select_analysis_representative_pair_id",
     "validate_d01_manifest_handoff",
     "validate_d01_row_linkage",
+    "validate_phase2_output_schema",
     "write_parquet_batches_atomic",
 ]

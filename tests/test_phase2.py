@@ -4,17 +4,23 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
+import tokenization_premium.phase2 as phase2
+from tokenization_premium.hashing import sha256_file
 from tokenization_premium.paths import PROJECT_ROOT
 from tokenization_premium.phase2 import (
     BLOCKED_BY_P2_CONTRACT,
     EXACT_DUPLICATE_IDENTITY_SCOPE,
     NORMALIZATION_OPERATIONS,
+    P2_AGGREGATE_COUNT_FIELDS,
+    P2_COMPLETION_STATUS,
     P2_CONTRACT_COMMIT,
+    P2_OUTPUT_SCHEMA,
     decode_integrity_ok,
     derive_pair_quality_status,
     empty_text_flag,
@@ -24,12 +30,137 @@ from tokenization_premium.phase2 import (
     named_entity_deferred_fields,
     normalize_ssot_text,
     open_phase2_duckdb,
+    require_phase2_canonical_evidence,
     select_analysis_representative_pair_id,
     validate_d01_manifest_handoff,
     validate_d01_row_linkage,
+    validate_phase2_output_schema,
     write_parquet_batches_atomic,
 )
 from tokenization_premium.registry import duplicate_group_id, provenance_pair_id
+from tokenization_premium.schemas import pair_registry_schema
+
+
+def _synthetic_d01_row(
+    pair_id: str,
+    *,
+    logical_corpus: str,
+    duplicate_id: str,
+    representative_pair_id: str,
+    ko_text: str,
+    en_text: str,
+) -> dict[str, object]:
+    return {
+        "pair_id": pair_id,
+        "source_id": f"source-{logical_corpus.lower()}",
+        "source_tier": "A" if logical_corpus in {"025", "026"} else None,
+        "domain": "일상생활",
+        "sentence_type": "other",
+        "translation_direction": "KO_TO_EN",
+        "ko_text_raw": ko_text,
+        "en_text_raw": en_text,
+        "ko_text_nfc": None,
+        "en_text_nfc": None,
+        "ko_text_analysis": None,
+        "en_text_analysis": None,
+        "pair_quality_status": "review",
+        "pair_quality_score": None,
+        "pair_version": "v001",
+        "source_license_note": "synthetic-test-only",
+        "source_record_id": pair_id,
+        "raw_locator": json.dumps({"pair_id": pair_id}, sort_keys=True),
+        "duplicate_group_id": duplicate_id,
+        "representative_pair_id": representative_pair_id,
+        "domain_raw": None,
+        "subdomain_raw": None,
+        "source_provenance_raw": None,
+        "is_validation_upstream": False,
+        "translation_direction_raw": "KO_TO_EN",
+        "translation_direction_review_flag": False,
+        "mt_field_present": False,
+        "sentence_type_raw": None,
+        "sentence_type_provenance_status": "SYNTHETIC_TEST",
+        "normalization_status": "PENDING_PHASE2",
+        "qc_stage_status": "PENDING_PHASE2",
+        "direction_conflict_flag": False,
+        "domain_conflict_flag": False,
+        "source_id_conflict_flag": False,
+        "source_provenance_raw_conflict_flag": False,
+        "logical_corpus": logical_corpus,
+        "canonical_ingest_role": f"SYNTHETIC_{logical_corpus}",
+        "raw_file_relative_path": f"synthetic/{logical_corpus}.json",
+        "raw_file_sha256": "0" * 64,
+        "raw_sheet_name": None,
+        "raw_physical_row_number": None,
+        "source_native_id": None,
+        "source_native_sid": None,
+        "raw_metadata_json": "{}",
+    }
+
+
+def _prepare_synthetic_phase2_project(tmp_path: Path) -> dict[str, Any]:
+    project_root = tmp_path / "project"
+    input_path = project_root / "data/registry/PAIR_REGISTRY_v001.parquet"
+    output_path = project_root / "data/registry/PAIR_REGISTRY_v002.parquet"
+    d01_manifest_path = project_root / "outputs/manifests/PAIR_REGISTRY_MANIFEST_v001.json"
+    contract_path = project_root / "docs/contracts/P2_NORMALIZE_QC_PRECONTRACT_v1.md"
+    runtime_dir = project_root / ".runtime/p2-e2e"
+    rows = [
+        _synthetic_d01_row(
+            "pair_legacy_duplicate",
+            logical_corpus="LEGACY",
+            duplicate_id="dup-exact",
+            representative_pair_id="pair_legacy_duplicate",
+            ko_text="같은 문장입니다",
+            en_text="This is the same sentence.",
+        ),
+        _synthetic_d01_row(
+            "pair_tier_a_survivor",
+            logical_corpus="025",
+            duplicate_id="dup-exact",
+            representative_pair_id="pair_legacy_duplicate",
+            ko_text="같은 문장입니다",
+            en_text="This is the same sentence.",
+        ),
+        _synthetic_d01_row(
+            "pair_unique_026",
+            logical_corpus="026",
+            duplicate_id="dup-026",
+            representative_pair_id="pair_unique_026",
+            ko_text="기술 문장입니다",
+            en_text="This is a technical sentence.",
+        ),
+        _synthetic_d01_row(
+            "pair_unique_legacy",
+            logical_corpus="LEGACY",
+            duplicate_id="dup-legacy",
+            representative_pair_id="pair_unique_legacy",
+            ko_text="문화 문장입니다",
+            en_text="This is a cultural sentence.",
+        ),
+    ]
+    input_path.parent.mkdir(parents=True)
+    pq.write_table(pa.Table.from_pylist(rows, schema=pair_registry_schema()), input_path)
+    d01_manifest_path.parent.mkdir(parents=True)
+    d01_manifest_path.write_text(
+        json.dumps(
+            {"pair_registry": {"sha256": sha256_file(input_path), "row_count": len(rows)}},
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    contract_path.parent.mkdir(parents=True)
+    contract_path.write_text("synthetic copy of frozen P2 contract\n", encoding="utf-8")
+    return {
+        "project_root": project_root,
+        "input_path": input_path,
+        "output_path": output_path,
+        "d01_manifest_path": d01_manifest_path,
+        "contract_path": contract_path,
+        "runtime_dir": runtime_dir,
+        "row_count": len(rows),
+        "run_id": "P2_SYNTHETIC_E2E",
+    }
 
 
 @pytest.mark.parametrize(
@@ -236,6 +367,110 @@ def test_phase2_duckdb_uses_spill_safe_synthetic_connection(tmp_path: Path) -> N
     assert runtime_dir.is_dir()
 
 
+def test_p2_output_schema_is_the_single_report_field_contract() -> None:
+    assert len(P2_OUTPUT_SCHEMA) == 70
+    assert len(P2_OUTPUT_SCHEMA.names) == len(set(P2_OUTPUT_SCHEMA.names))
+    exact_duplicate = P2_OUTPUT_SCHEMA.field("exact_duplicate_flag")
+    assert exact_duplicate.type == pa.bool_()
+    assert exact_duplicate.nullable is True
+    assert "exact_duplicate_flag" in P2_AGGREGATE_COUNT_FIELDS
+    assert P2_OUTPUT_SCHEMA.field("secondary_rejection_flags").type == pa.string()
+
+
+def test_synthetic_population_to_completion_manifest_e2e(tmp_path: Path) -> None:
+    prepared = _prepare_synthetic_phase2_project(tmp_path)
+    result = phase2._execute_phase2_population(
+        project_root=prepared["project_root"],
+        input_path=prepared["input_path"],
+        output_path=prepared["output_path"],
+        d01_manifest_path=prepared["d01_manifest_path"],
+        contract_path=prepared["contract_path"],
+        runtime_dir=prepared["runtime_dir"],
+        run_id=prepared["run_id"],
+        expected_row_count=prepared["row_count"],
+        execution_code_commit_override="synthetic-code-commit",
+    )
+    output_path = prepared["output_path"]
+    assert result.validation_status == "PASS"
+    assert result.row_count == 4
+    assert result.output_column_count == len(P2_OUTPUT_SCHEMA)
+    assert output_path.is_file()
+    assert not output_path.with_suffix(output_path.suffix + ".candidate").exists()
+    assert validate_phase2_output_schema(output_path).equals(P2_OUTPUT_SCHEMA)
+    duplicate_rows = {
+        row["pair_id"]: row
+        for row in pq.read_table(
+            output_path,
+            columns=[
+                "pair_id",
+                "analysis_representative_pair_id",
+                "exact_duplicate_flag",
+                "secondary_rejection_flags",
+            ],
+        ).to_pylist()
+    }
+    assert duplicate_rows["pair_tier_a_survivor"]["analysis_representative_pair_id"] == "pair_tier_a_survivor"
+    assert duplicate_rows["pair_tier_a_survivor"]["exact_duplicate_flag"] is False
+    assert duplicate_rows["pair_legacy_duplicate"]["analysis_representative_pair_id"] == "pair_tier_a_survivor"
+    assert duplicate_rows["pair_legacy_duplicate"]["exact_duplicate_flag"] is True
+    assert isinstance(duplicate_rows["pair_legacy_duplicate"]["secondary_rejection_flags"], str)
+
+    report_paths = [
+        prepared["project_root"] / "outputs/reports/QC_FLOW_v001.csv",
+        prepared["project_root"] / "outputs/reports/LID_QC_PASS_RATE_v001.csv",
+        prepared["project_root"] / "outputs/reports/MANUAL_QC_SAMPLING_FRAME_SUMMARY_v001.csv",
+        prepared["project_root"] / "outputs/reports/P2_EXECUTION_REPORT_v001.json",
+    ]
+    assert all(path.is_file() for path in report_paths)
+    manifest_path = prepared["project_root"] / "outputs/manifests/QC_MANIFEST_v001.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["completion_status"] == P2_COMPLETION_STATUS
+    assert manifest["output"]["column_count"] == 70
+    assert manifest["output"]["sha256"] == result.output_sha256
+    assert len(manifest["reports"]) == 4
+    evidence = require_phase2_canonical_evidence(prepared["project_root"])
+    assert evidence.output_path == output_path.resolve()
+    assert evidence.output_sha256 == result.output_sha256
+    assert evidence.row_count == 4
+
+
+def test_report_failure_never_promotes_candidate_or_completion_manifest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    prepared = _prepare_synthetic_phase2_project(tmp_path)
+
+    def reject_reports(
+        report_paths: dict[str, Path],
+        *,
+        expected_row_count: int,
+        run_id: str,
+        output_sha256: str,
+    ) -> None:
+        del report_paths, expected_row_count, run_id, output_sha256
+        raise ValueError("synthetic report validation failure")
+
+    monkeypatch.setattr(phase2, "_validate_candidate_reports", reject_reports)
+    with pytest.raises(ValueError, match="synthetic report validation failure"):
+        phase2._execute_phase2_population(
+            project_root=prepared["project_root"],
+            input_path=prepared["input_path"],
+            output_path=prepared["output_path"],
+            d01_manifest_path=prepared["d01_manifest_path"],
+            contract_path=prepared["contract_path"],
+            runtime_dir=prepared["runtime_dir"],
+            run_id=prepared["run_id"],
+            expected_row_count=prepared["row_count"],
+            execution_code_commit_override="synthetic-code-commit",
+        )
+    output_path = prepared["output_path"]
+    assert not output_path.exists()
+    assert output_path.with_suffix(output_path.suffix + ".candidate").is_file()
+    assert not (prepared["project_root"] / "outputs/manifests/QC_MANIFEST_v001.json").exists()
+    assert not (prepared["project_root"] / "outputs/reports/QC_FLOW_v001.csv").exists()
+    with pytest.raises(FileNotFoundError, match="completion manifest is required"):
+        require_phase2_canonical_evidence(prepared["project_root"])
+
+
 def test_canonical_notebook_consumes_v11_and_authorizes_only_population_qc() -> None:
     notebook_path = PROJECT_ROOT / "notebooks/02_normalize_and_qc.ipynb"
     notebook = json.loads(notebook_path.read_text(encoding="utf-8"))
@@ -259,6 +494,7 @@ def test_canonical_notebook_consumes_v11_and_authorizes_only_population_qc() -> 
         assert any(section in cell for cell in markdown)
     assert P2_CONTRACT_COMMIT in code
     assert "execute_phase2_population" in code
+    assert "require_phase2_canonical_evidence" in code
     assert "FULL_RUN_AUTHORIZED = True" in code
     assert "MANUAL_AUDIT_SAMPLE_DRAW_AUTHORIZED = False" in code
     assert "analysis_representative_pair_id" in code
