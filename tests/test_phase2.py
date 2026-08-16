@@ -236,33 +236,35 @@ def test_phase2_duckdb_uses_spill_safe_synthetic_connection(tmp_path: Path) -> N
     assert runtime_dir.is_dir()
 
 
-def test_notebook_scaffold_consumes_v11_and_keeps_full_run_blocked() -> None:
+def test_canonical_notebook_consumes_v11_and_authorizes_only_population_qc() -> None:
     notebook_path = PROJECT_ROOT / "notebooks/02_normalize_and_qc.ipynb"
     notebook = json.loads(notebook_path.read_text(encoding="utf-8"))
     markdown = ["".join(cell["source"]) for cell in notebook["cells"] if cell["cell_type"] == "markdown"]
     code = "\n".join("".join(cell["source"]) for cell in notebook["cells"] if cell["cell_type"] == "code")
     expected_sections = [
         "0 Contract / Scope",
-        "1 Environment + Inputs",
-        "2 D-01 Integrity Handoff",
+        "1 Input lineage",
+        "2 D-01 handoff verification",
         "3 Normalization",
-        "4 QC Flag Computation",
-        "5 Duplicate Disposition",
-        "6 Language-Side Smoke",
-        "7 Semantic QC",
-        "8 QC Flow",
-        "9 Registry v002",
-        "10 Artifact / Hash",
-        "11 G1 Closure Evidence",
+        "4 Decode / Unicode integrity",
+        "5 Structural QC",
+        "6 Exact duplicate analysis disposition",
+        "7 Language-side sanity review",
+        "8 Population pair_quality_status",
+        "9 QC aggregate flow",
+        "10 v002 artifact validation",
+        "11 Manifest / hashes / G1 evidence summary",
     ]
     for section in expected_sections:
         assert any(section in cell for cell in markdown)
     assert P2_CONTRACT_COMMIT in code
-    assert "ProgressHeartbeat" in code and "progress_tqdm" in code
-    assert "SYNTHETIC_ONLY = True" in code
-    assert "FULL_RUN_AUTHORIZED = False" in code
+    assert "execute_phase2_population" in code
+    assert "FULL_RUN_AUTHORIZED = True" in code
+    assert "MANUAL_AUDIT_SAMPLE_DRAW_AUTHORIZED = False" in code
     assert "analysis_representative_pair_id" in code
-    assert "manual_semantic_score" in code
-    assert "o200k" not in code.lower()
+    assert "PAIR_REGISTRY_v002.parquet" not in code
+    assert "lingua" not in code.lower().replace("'lingua'", "")
+    assert "fasttext" not in code.lower().replace("'fasttext'", "")
     assert "lid_failure_flag" not in code
-    assert code.count(BLOCKED_BY_P2_CONTRACT) >= 2
+    assert BLOCKED_BY_P2_CONTRACT not in code
+    assert all(cell.get("execution_count") is None for cell in notebook["cells"] if cell["cell_type"] == "code")
