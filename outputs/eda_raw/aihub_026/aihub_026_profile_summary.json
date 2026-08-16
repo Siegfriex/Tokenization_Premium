@@ -1,0 +1,22 @@
+{
+  "dataset_local_id": "AIHUB_026",
+  "dataset_title": "AIHub 026 기술과학 분야 한–영 병렬 말뭉치",
+  "audit_timestamp": "2026-08-16T14:10:14+09:00",
+  "audit_completed_timestamp": "2026-08-16T14:10:49+09:00",
+  "raw_dir": "/home/sieg/projects-wsl/Tokenization_Premium/data/raw/aigub/026.기술과학 분야 한-영 번역 병렬 말뭉치 데이터",
+  "physical_file_count": 4,
+  "unique_content_file_count": 2,
+  "profiled_unique_data_files": 2,
+  "logical_record_count": 1350162,
+  "sample_record_count": 13632,
+  "population_scope": "FULL POPULATION AGGREGATES over unique SHA-256 JSON/XLSX content",
+  "sample_method": "deterministic BLAKE2b(seed=20260816) hash threshold 10/1000 (~1%); scatter/sample only",
+  "notebook_status": "SUPPORTING / EXPLORATORY / PRE-INGESTION EDA / NOT G1 PASS",
+  "raw_file_manifest_sha": "da4349a648306621173d8fcde6bcc18a5c0a0dbb35211c9a36d86971186ef801",
+  "stability_counts": {
+    "STABLE_FILE": 4,
+    "DOWNLOAD_IN_PROGRESS": 0,
+    "PARTIAL_DOWNLOAD": 0,
+    "UNKNOWN": 0
+  }
+}
