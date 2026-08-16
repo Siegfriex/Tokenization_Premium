@@ -15,7 +15,7 @@ Each of the 3 currently-known local dataset families (025, 026, Legacy) gets one
 
 ## 2. Source registry & license note
 
-Per D-01 schema (§12.1): `source_id`, `source_tier`, `source_license_note`. `source_tier` stays unpopulated (`null`) until AMB-12 resolves (see `configs/research_v1.yaml`). `source_license_note` must record the **self-asserted** raw `license` field value (`"open"` for 025/026 JSON) verbatim, plus an explicit annotation that this has not been checked against AIHub's official usage policy (application/approval requirement, redistribution restriction — per Perplexity's evidence audit U1-U3). Legacy has no license field at all — `source_license_note = "UNKNOWN — no license metadata in source"`.
+Per D-01 schema (§12.1): `source_id`, `source_tier`, `source_license_note`. **`source_tier` values are now Director-approved (D-RD-05)** — 025=A, 026=A, Legacy=`null`/UNASSIGNED (not B — the earlier tentative-B recommendation was explicitly withdrawn; Tier B must not be used as a provenance-shortfall fallback). **These values are not yet written into `configs/research_v1.yaml`** — see §14 `PROPOSED_G1_CONFIG_DELTA` below; that file is intentionally left untouched this round to avoid mixing pre-canonical-integration lineage with the G0 canonical tree. `source_license_note` must record the **self-asserted** raw `license` field value (`"open"` for 025/026 JSON) verbatim, plus an explicit annotation that this has not been checked against AIHub's official usage policy (application/approval requirement, redistribution restriction — per Perplexity's evidence audit U1-U3). Legacy has no license field at all — `source_license_note = "UNKNOWN — no license metadata in source"`.
 
 ## 3. Raw file hash linkage
 
@@ -31,7 +31,11 @@ For JSON corpora, the registry must retain `sn`, `data_set`, `domain` (raw), `su
 
 ## 6. Translation direction & source/domain mapping
 
-Apply the rules in `DIRECTION_AND_DOMAIN_MAPPING_PRECONTRACT_v1.md` §Task 5 exactly (including the `HUMAN_PARALLEL_UNKNOWN` treatment for Legacy). Domain mapping is **not** applied at ingest time in final form — only `domain_raw`/`subdomain_raw` are captured at 01; the canonical `domain` field population is deferred until the mapping table is frozen (post-Raw-EDA), consistent with the 01/02 boundary above — mapping is not a structural-parse concern.
+Apply the rules in `DIRECTION_AND_DOMAIN_MAPPING_PRECONTRACT_v1.md` §Task 5/6 exactly — **both are now Director-approved (D-RD-06/D-RD-07), not drafts**: Legacy `translation_direction = UNKNOWN` (not `HUMAN_PARALLEL_UNKNOWN`); the top-level domain mapping table is approved and may be applied at ingest for `domain` (canonical), while `domain_raw`/`subdomain_raw` are always captured alongside, unmodified — subdomains are never mapped to canonical form by design (not a pending item).
+
+### 6a. Raw `source` field ≠ canonical `source_id` (new distinction, directive-mandated)
+
+The JSON/XLSX raw `source` field (observed values: `SBS`, `크라우드 소싱`, `크라우드소싱`, `한국연구재단`, `특허정보원`, publisher names for Legacy news, etc.) is **not** the canonical `source_id`. It must be stored as a separate auxiliary field, `source_provenance_raw`, preserved verbatim (including literal-string variants like the "크라우드 소싱"/"크라우드소싱" space difference — never normalized away). Canonical `source_id` stays at corpus/acquisition-family granularity (`025-family`, `026-family`, `Legacy-family`, or the official AIHub `dataSetSn` once confirmed) — one level up from these fine-grained raw labels. Conflating the two would corrupt the Identifiability Gate below, since `source_provenance_raw` and `source_id` must be checked as **independent** axes, not collapsed into one.
 
 ## 7. Duplicate group semantics & exact-duplicate handling candidates
 
@@ -54,12 +58,61 @@ At minimum, the registry build must reconcile and report: physical file record c
 
 `pair_id, source_id, source_tier, domain, sentence_type, translation_direction, ko_text_raw, en_text_raw, ko_text_nfc, en_text_nfc, ko_text_analysis, en_text_analysis, pair_quality_status, pair_quality_score, pair_version, source_license_note`
 
-## 12. Proposed auxiliary fields (not in SSOT §12.1 verbatim — flagged as extensions)
+## 12. Auxiliary fields (status: ACCEPTED, directive §2/§7 — no longer pending Director confirmation as a batch)
 
-`source_record_id`, `raw_locator`, `duplicate_group_id`, `domain_raw`, `subdomain_raw`, `source_raw` (uncoerced raw source label, e.g. preserving "크라우드 소싱" vs "크라우드소싱" distinctly), `is_validation_upstream` (AIHub-provided split flag, distinct from project split), `translation_direction_review_flag`, `mt_field_present` (whether an `mt` staging field existed in the source record, for provenance transparency about the source's own translation pipeline).
-
-These auxiliary fields require Research Director confirmation before being treated as required — see decision queue. None are implemented yet.
+`source_record_id`, `raw_locator`, `duplicate_group_id` (required, §7), `domain_raw`, `subdomain_raw`, `source_provenance_raw` (§6a — the raw `source` label, distinct from `source_id`; preserves "크라우드 소싱" vs "크라우드소싱" distinctly), `is_validation_upstream` (AIHub-provided split flag, distinct from project split), `translation_direction_review_flag`, `mt_field_present` (whether an `mt` staging field existed in the source record). None are implemented yet — this is still semantics-only, no notebook/code written.
 
 ## 13. Downstream linkage to D-02/D-03/D-04
 
 `pair_id` is the join key into D-02 (Representation Features), D-03 (Morphology Measurement), D-04 (Token Measurement) — this registry precontract does not change that join-key design, it only fixes what `pair_id` itself means (§4 above, and `PAIR_IDENTITY_AND_DUPLICATE_CONTRACT_v1.md`).
+
+## 14. Identifiability Gate — minimum required diagnostics (directive §5, new)
+
+Before G1/G5 allow any independent-effect interpretation of `domain`, `source_id`, or `translation_direction` coefficients, the following four contingency tables are **mandatory**, not optional:
+
+1. `source_id × canonical_domain`
+2. `source_id × translation_direction`
+3. `source_provenance_raw × canonical_domain`
+4. `source_provenance_raw × translation_direction`
+
+**This is not a precautionary formality — near-perfect confounding is already confirmed in current evidence**:
+- **026**: `domain=기술과학` (train 319,551 + valid 40,359) is **numerically identical** to `source_provenance_raw=특허정보원` (train 319,551 + valid 40,359) — every 특허정보원 row is 기술과학 and vice versa. The other four 026 domains (세계/경제/정치/기후) are correspondingly identical to `source_provenance_raw=한국연구재단`. Domain and raw-source are **not separably estimable** for 026 as currently structured.
+- **025**: the `EN_TO_KO` validation split is **100% `domain=해외영업`** (all 150,038 rows), while `EN_TO_KO` training is mixed across all 3 domains — a direction×domain×split asymmetry that must be visible before any split-based generalization claim.
+
+Per SSOT Gate G-ID (§20.2): if domain and source (raw or canonical) are structurally unidentifiable, do not force a coefficient table — redesign (e.g., treat `domain` and `source_provenance_raw` as a single composite factor for 026, or restrict domain-effect claims to 025 only where more variation exists). This redesign decision is **not made here** — it is deferred to whoever runs the actual M0-M3 model fitting, with this gate as a hard precondition.
+
+## 15. PROPOSED_G1_CONFIG_DELTA (not applied — `configs/research_v1.yaml` untouched this round)
+
+Per Director instruction (config change policy, directive §9): `research/g1-prep-claude` branched before G0 canonical integration, so editing `configs/research_v1.yaml` here risks mixing G0/G1 lineage. The values below are the machine-readable delta to apply **once a Vice Director sequences it onto the canonical G0 base** — this is a specification, not a file edit.
+
+```yaml
+# PROPOSED_G1_CONFIG_DELTA -- apply onto configs/research_v1.yaml AFTER G0 canonical PASS, not before.
+corpus_tier_assignment:
+  "025": A
+  "026": A
+  legacy: null   # UNASSIGNED, not B -- D-RD-05 explicitly withdraws the earlier tentative-B recommendation
+
+corpus_role:
+  "025": primary_backbone
+  "026": primary_domain_supplement
+  legacy: sensitivity_only
+
+corpus_primary_analysis_eligible:
+  "025": true
+  "026": true
+  legacy: false
+
+primary_cohort_policy:
+  mode: all_qc_accepted_tier_a   # D-RD-08 -- no arbitrary cap, no pre-analysis sampling
+  fixed_n_cap: null
+
+translation_direction_defaults:
+  "025": [KO_TO_EN, EN_TO_KO]   # per raw provenance, D-RD-06
+  "026": [KO_TO_EN]
+  legacy: UNKNOWN                # D-RD-06 -- not HUMAN_PARALLEL_UNKNOWN
+
+domain_mapping_top_level:        # D-RD-07 -- subdomains stay raw-only, never mapped
+  "025": {일상생활: general, 해외고객과의채팅: dialogue, 해외영업: other}
+  "026": {기술과학: technology, 세계: other, 경제: other, 정치: other, 기후: other}
+  legacy: {구어체: general, 대화체: dialogue, 뉴스: news, 한국문화: other, 조례: legal, 지자체웹사이트: administration}
+```

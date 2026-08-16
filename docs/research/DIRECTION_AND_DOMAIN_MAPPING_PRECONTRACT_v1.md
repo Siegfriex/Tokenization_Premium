@@ -1,6 +1,6 @@
 # Translation Direction & Domain Mapping — Pre-G1 Precontract (v1)
 
-Draft only. Domain mapping is explicitly **not frozen** here — per directive, final mapping waits for Raw EDA Agent's label-distribution results. Direction mapping is closer to final because the provenance signals are already visible in the raw schema.
+**Status (2026-08-16): APPROVED by Research Director as D-RD-06 (direction) and D-RD-07 (domain).** These are no longer drafts pending Raw EDA — `eda/g0-raw-notebooks@a55b86d` has since reported the actual enumerated domain labels for all three families (025: 해외영업/일상생활/해외고객과의채팅; 026: 기술과학/세계/경제/정치/기후), incorporated below. Subdomain-level mapping remains intentionally unmapped — subdomains are preserved as raw metadata only, by design, not because evidence is pending. See `docs/research/G1_APPROVED_DECISIONS_2026-08-16.md` for the compact decision record.
 
 ## Task 5 — Translation Direction Mapping Contract
 
@@ -33,34 +33,42 @@ Applied to observed local data: 025 TL1/VL1 (영한 files) → `EN_TO_KO`; 025 T
 No `source_language`/`target_language` column, no `ko_original`/`en_original` staging field exists in any of the 10 workbooks. Per directive instruction, filename convention alone (e.g., inferring direction from a workbook's topic name) must **not** be used to assert direction.
 
 ```text
-Legacy 원문/번역문 rows → translation_direction = HUMAN_PARALLEL_UNKNOWN
+Legacy 원문/번역문 rows → translation_direction = UNKNOWN
 ```
 
-This is a deliberate use of the SSOT's `HUMAN_PARALLEL_UNKNOWN` value rather than plain `UNKNOWN`: the data unambiguously *is* a human-produced parallel pair (원문=original text, 번역문=translated text, by column naming), it is only the source→target language direction that is not machine-recorded. `UNKNOWN` is reserved for cases where even parallel-pair status is in doubt.
+**D-RD-06 (approved, supersedes this document's earlier recommendation)**: use plain `UNKNOWN`, **not** `HUMAN_PARALLEL_UNKNOWN`. The earlier draft reasoned that 원문/번역문 column naming alone was sufficient evidence of "unambiguously human-parallel, direction merely unrecorded" — the Research Director ruled current evidence does not support that inference: without any translation-workflow/annotator documentation, "human parallel" itself is an unverified assumption, not just the direction within it. `HUMAN_PARALLEL_UNKNOWN` may be used later **only if** official construction documentation explicitly confirms human-parallel-translation methodology for this corpus.
 
-## Task 6 — Domain Mapping Precontract (DRAFT, NOT FROZEN)
+## Task 6 — Domain Mapping Precontract (APPROVED — D-RD-07)
 
 SSOT taxonomy (fixed): `general | administration | legal | news | technology | education | dialogue | other`
 
-**Principles** (all four are binding regardless of which mapping is eventually chosen):
+**Principles** (all four are binding, unchanged by approval):
 1. Preserve the source's raw label (`domain_raw`, `subdomain_raw`) unmodified alongside the canonical `domain` field — never overwrite raw labels, including literal-string variants like "크라우드 소싱" vs "크라우드소싱" in 025.
 2. `domain` (canonical) is a separate, additional field — not a renaming of the raw label.
 3. When mapping confidence is low, map to `other` rather than forcing a fit.
-4. Never conflate `source_id` and `domain` — a single source can span domains and a domain can span sources; do not let one stand in for the other (this is exactly the confounding SSOT T-04 and the Identifiability Gate §20.2 are designed to catch).
+4. Never conflate `source_id` and `domain` — a single source can span domains and a domain can span sources; do not let one stand in for the other (this is exactly the confounding SSOT T-04 and the Identifiability Gate §20.2 are designed to catch). **This is not theoretical**: `eda/g0-raw-notebooks` confirms 026's `domain=기술과학` (train 319,551 + valid 40,359) is numerically identical to `source=특허정보원` (train 319,551 + valid 40,359) — a **near-perfect confound**, see `docs/contracts/G1_PAIR_REGISTRY_PRECONTRACT_v1.md` §Identifiability Gate.
 
-### Draft mapping table
+### Approved mapping table (top-level domain → canonical `domain`; subdomains stay raw-only)
 
-| Local family/workbook | Raw label evidence available | Draft canonical `domain` | Confidence | Why not frozen |
-|---|---|---|---|---|
-| 025 (전체) | 3 domains / 11 subdomains — **counts only, literal label strings not yet enumerated** by data-recon | *(pending)* | — | Cannot responsibly map a label we have not seen; requires Raw EDA's label enumeration |
-| 026 (전체) | 5 domains / 15 subdomains, corpus-level title "기술과학"(tech-science), sources = 한국연구재단/특허정보원 | `technology` | MEDIUM-HIGH (corpus-level only) | Corpus-level label is unambiguous; 15 subdomain literal values still unseen, so subdomain-level mapping is pending |
-| Legacy 구어체(1)/(2) | No domain column at all in this workbook's schema | `other` (with `domain_raw=null`) | LOW | No raw signal exists to map from |
-| Legacy 대화체 | 대분류(5): 여행/쇼핑(46,524), 비즈니스(28,064), 일상대화(24,012), + 2 more unlisted-count categories | `dialogue` | HIGH | Category labels directly match SSOT's `dialogue` value |
-| Legacy 뉴스(1-4) | 자동분류1/2/3 (3-tier, many empty), publisher names (국민일보/서울경제/한겨레 등) | `news` | HIGH | Direct match; publisher metadata corroborates |
-| Legacy 한국문화 | 키워드 102종 (keyword list, not a domain/category field) | `general` or `other` — **judgment call, not resolved here** | LOW | "Korean culture" content doesn't cleanly fit any single SSOT value; keyword list ≠ domain category |
-| Legacy 조례 (ordinances) | 지자체 54종 (municipality names only, no genre field) | `legal` (lean) vs `administration` (alternative) — **boundary case, not resolved here** | LOW-MEDIUM | Ordinances are municipal statute text (favors `legal`), but they are also administrative-government output (favors `administration`); SSOT treats these as distinct taxonomy values so a Director call is needed |
-| Legacy 지자체웹사이트 (local gov website) | 지자체 4종 | `administration` | MEDIUM | Government website content fits administrative domain more directly than legal |
+| Corpus | Raw top-level domain label (with observed scale) | Canonical `domain` (D-RD-07) |
+|---|---|---|
+| 025 | 일상생활 (train 849,856 across directions) | `general` |
+| 025 | 해외고객과의채팅 (train 510,232 across directions) | `dialogue` |
+| 025 | 해외영업 (train 1,040,219 across directions) | `other` |
+| 026 | 기술과학 (train 319,551 + valid 40,359 — **= source 특허정보원 exactly**) | `technology` |
+| 026 | 세계 (train 400,123 + valid 49,818) | `other` |
+| 026 | 경제 (train 240,439 + valid 29,705) | `other` |
+| 026 | 정치 (train 160,064 + valid 20,175) | `other` |
+| 026 | 기후 (train 79,967 + valid 9,961) | `other` |
+| Legacy | 구어체 | `general` |
+| Legacy | 대화체 | `dialogue` |
+| Legacy | 뉴스 | `news` |
+| Legacy | 한국문화 | `other` |
+| Legacy | 조례 | `legal` |
+| Legacy | 지자체웹사이트 | `administration` |
 
-**Two explicit boundary cases flagged for Research Director** (not Raw-EDA-blocked, since the ambiguity is conceptual, not a missing-label problem): 한국문화 (general vs other) and 조례 (legal vs administration). See decision queue.
+Both boundary cases previously flagged (한국문화 vs `general`/`other`; 조례 vs `legal`/`administration`) are **resolved by D-RD-07** as shown above (한국문화→`other`, 조례→`legal`). No further Director input needed on these two.
 
-**Everything else in this table is DRAFT and explicitly not frozen** until Raw EDA Agent reports the actual enumerated label distributions for 025's 3 domains/11 subdomains and 026's 15 subdomains.
+**Subdomain values are never mapped to canonical form** — 025's 11 subdomains (e.g. 도소매유통, 여행, 음식, 구매, 예약, "숙박,음식점", 정보통신, "연구개발,과학기술", "금융,보험", "기계장비,의료정밀", 부동산) and 026's 15 subdomains (e.g. IT, 빅데이터, 인공지능, 산업경제, 경제일반, 국제기구, 국제통상, 사회_의료, 사회_환경, 문화_문화재, 문화_예술, 정치일반, 국방외교, 북한, 기후) are retained exclusively as `subdomain_raw` — per directive: "subdomain은 별도 raw metadata로 우선 보존."
+
+**New finding surfaced during this update (not previously visible)**: 025's `EN_TO_KO` validation split is **100% domain=해외영업** (all 150,038 valid rows), whereas `EN_TO_KO` training is mixed across all 3 domains. This is a direction×domain×split structural asymmetry, not just the direction×domain confound already noted — flagged for the Identifiability Gate alongside the 026 confound.

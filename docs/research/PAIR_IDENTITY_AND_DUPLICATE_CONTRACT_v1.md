@@ -2,6 +2,8 @@
 
 Scope: **semantics only**. Hash algorithm choice, string canonicalization implementation, and code all belong to Codex. This document defines what each identity concept *means* and what policy candidate applies to each duplicate scenario — nothing here is written into a config yet.
 
+**Status update (2026-08-16, Vice Director accepted, no longer proposal)**: the `pair_id`(provenance-based) vs `duplicate_group_id`(content-based) split in §1-3 and §5 below is **ACCEPTED** — it is not a further Research Director decision item. Binding restatement: Record Identity ≠ Pair Content Identity; raw records are preserved in the registry regardless of duplicate status (never deleted for being a duplicate); **one content identity (`duplicate_group_id`) can map to multiple `pair_id`s**; Analysis-Representative selection alone governs primary-cohort inclusion and remains the one open item (§4, still `WAIT_FOR_TARGETED_EDA_RECON`); `translation_direction` conflict within a group is a **QC signal**, never a key used to split the group.
+
 ## 1. Why `pair_id` should not be a plain content hash
 
 If `pair_id = hash(ko_text, en_text)`, two things break:
@@ -34,7 +36,7 @@ If `duplicate_group_id` is computed over `(ko_text, en_text, translation_directi
 
 ## 4. Scenario-by-scenario policy candidates
 
-Per directive: `HARD_EXCLUDE_DUPLICATE | RETAIN_PROVENANCE_ONLY | KEEP_AS_DISTINCT | REVIEW_REQUIRED`. None of these are written to a final config yet — proposals only.
+Per directive: `HARD_EXCLUDE_DUPLICATE | RETAIN_PROVENANCE_ONLY | KEEP_AS_DISTINCT | REVIEW_REQUIRED`. **Status (2026-08-16): the final Analysis-Representative selection rule (which policy wins operationally for scenarios 1/2/3/6) remains explicitly OPEN — classification `WAIT_FOR_TARGETED_EDA_RECON` — pending other agents' in-progress work on 025 direction×split duplicate decomposition, exact-pair overlap, multiplicity, cross-corpus duplicates, and collision-resistant rechecking. Do not adopt any of earliest-`sn` / non-validation-preference / source-tier-preference / direction-preference / first-occurrence yet.** What IS already settled (not open): raw provenance is always preserved; one `duplicate_group_id` can span multiple `pair_id`s; the project split must prevent duplicate/near-duplicate leakage; an excluded exact duplicate must never contribute twice to the primary cohort.
 
 | # | Scenario | Local evidence | Proposed policy candidate | Reasoning |
 |---|---|---|---|---|
@@ -55,7 +57,7 @@ Per directive: `HARD_EXCLUDE_DUPLICATE | RETAIN_PROVENANCE_ONLY | KEEP_AS_DISTIN
 | `source_record_id` | The raw in-file record identity, exactly as the source system encodes it. | **File-scoped, not global** — must be paired with a file/location qualifier | JSON: `sn` (data-recon confirmed unique **only within one file**, not verified across TL1 vs TL2). XLSX: `ID`/`SID` (confirmed **not** globally unique — 127,824 duplicate rows in Legacy when treated as global) |
 | `raw_locator` | Exact re-traceable physical position. | N/A (always paired with `source_record_id`) | JSON: `{relative_path, sn}`. XLSX: `{relative_path, sheet_name, physical_row_number}` — required fallback for 대화체, which has no reliable in-file key at all (composite `Set Nr.`+`발화자` has 8 duplicate rows out of 100,000) |
 | `pair_id` | Project-level stable key = **derived from `(source_id, source_record_id)`**, i.e., provenance-based, not content-based. Deterministic across re-ingest as long as source files are unchanged. | Project-wide unique by construction (one raw row → one `pair_id`) | — |
-| `duplicate_group_id` | Content-based exact-pair identity (§3 above); a proposed **extension**, not yet confirmed necessary until QC design is approved | Project-wide, many `pair_id`s may share one `duplicate_group_id` | Populated informationally by data-recon's BLAKE2b-64 candidate hashing; **collision-possible, not a certified exact-match algorithm** — final hash scheme is Codex's to choose |
+| `duplicate_group_id` | Content-based exact-pair identity (§3 above); **ACCEPTED as a required D-01 field** (Vice Director, 2026-08-16) | Project-wide, many `pair_id`s may share one `duplicate_group_id` | Populated informationally by data-recon's BLAKE2b-64 candidate hashing; **collision-possible, not a certified exact-match algorithm** — final hash scheme is Codex's to choose |
 
 **Explicit rule for Legacy**: never use bare `ID`/`SID` as `source_record_id` without a workbook/file qualifier — this applies to **every** Legacy workbook, not only 대화체, given the 127,824-row global collision count spans the whole family.
 
