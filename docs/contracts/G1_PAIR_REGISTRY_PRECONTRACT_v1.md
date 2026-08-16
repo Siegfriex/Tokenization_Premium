@@ -15,7 +15,15 @@ Each of the 3 currently-known local dataset families (025, 026, Legacy) gets one
 
 ## 2. Source registry & license note
 
-Per D-01 schema (§12.1): `source_id`, `source_tier`, `source_license_note`. **`source_tier` values are now Director-approved (D-RD-05)** — 025=A, 026=A, Legacy=`null`/UNASSIGNED (not B — the earlier tentative-B recommendation was explicitly withdrawn; Tier B must not be used as a provenance-shortfall fallback). **These values are not yet written into `configs/research_v1.yaml`** — see §14 `PROPOSED_G1_CONFIG_DELTA` below; that file is intentionally left untouched this round to avoid mixing pre-canonical-integration lineage with the G0 canonical tree. `source_license_note` must record the **self-asserted** raw `license` field value (`"open"` for 025/026 JSON) verbatim, plus an explicit annotation that this has not been checked against AIHub's official usage policy (application/approval requirement, redistribution restriction — per Perplexity's evidence audit U1-U3). Legacy has no license field at all — `source_license_note = "UNKNOWN — no license metadata in source"`.
+Per D-01 schema (§12.1): `source_id`, `source_tier`, `source_license_note`. **`source_tier` values are now Director-approved (D-RD-05, NOT withdrawn — Vice Director reconfirmed 2026-08-16)** — 025=A, 026=A, Legacy=`null`/UNASSIGNED (not B — the earlier tentative-B recommendation was explicitly withdrawn; Tier B must not be used as a provenance-shortfall fallback). **These values are not yet written into `configs/research_v1.yaml`** — see §15 `PROPOSED_G1_CONFIG_DELTA` below; that file is intentionally left untouched this round to avoid mixing pre-canonical-integration lineage with the G0 canonical tree.
+
+**New field (Vice Director addendum): `provenance_closure_status`** — separate from `source_tier`, tracks how closed the official-provenance loop is:
+- 025, 026: `PENDING_OFFICIAL_SCHEMA_AND_RELEASE_LINK`
+- Legacy: `PARTIAL_OFFICIAL_CONSTRUCTION_CONFIRMED_FIELD_AND_RELEASE_LINK_PENDING` (D87's general existence/scale is more corroborated by the official catalogue than 025/026's field-level schema is, even though Legacy's own schema/version link is weaker — the two facts don't contradict, they're different axes)
+
+`source_license_note` must record the **self-asserted** raw `license` field value (`"open"` for 025/026 JSON) verbatim, plus an explicit annotation that this has not been checked against AIHub's official usage policy (application/approval requirement, redistribution restriction — per Perplexity's evidence audit U1-U3). Legacy has no license field at all — `source_license_note = "UNKNOWN — no license metadata in source"`.
+
+**Forbidden inferences (Vice Director addendum, binding everywhere this precontract is applied)**: do not assert `mt` = confirmed MT draft; do not assert `ko`/`en` = confirmed human-final text; do not assert `ko_original`/`en_original` field semantics beyond "present/absent" before official confirmation; do not assert `license="open"` = redistribution permission.
 
 ## 3. Raw file hash linkage
 
@@ -23,7 +31,7 @@ Every `pair_id` must be traceable to the exact physical raw file(s) it came from
 
 ## 4. Pair grain & stable pair identity
 
-One registry row = one raw KO/EN record, per the identity design in `PAIR_IDENTITY_AND_DUPLICATE_CONTRACT_v1.md`: `pair_id` is provenance-derived (`source_id` + `source_record_id`), never a content hash. `duplicate_group_id` (content-based) is a proposed **auxiliary** field, not yet confirmed as required for G1 — see decision queue.
+One registry row = one raw KO/EN record, per the identity design in `PAIR_IDENTITY_AND_DUPLICATE_CONTRACT_v1.md`: `pair_id` is provenance-derived (`source_id` + `source_record_id`), never a content hash. `duplicate_group_id` (content-based) is a **required** auxiliary field (Vice Director accepted).
 
 ## 5. Raw provenance / raw field selection
 
@@ -39,7 +47,11 @@ The JSON/XLSX raw `source` field (observed values: `SBS`, `크라우드 소싱`,
 
 ## 7. Duplicate group semantics & exact-duplicate handling candidates
 
-Registry construction computes `duplicate_group_id` (if adopted) but does **not** perform Analysis Representative selection or hard-exclusion at step 01 — that is a `02_normalize_and_qc` decision per SSOT §10.1. Step 01's job is only to make duplicate membership *visible and queryable*, not to resolve it. See the 6 scenario policies in `PAIR_IDENTITY_AND_DUPLICATE_CONTRACT_v1.md` §4 — all remain candidates, none frozen.
+Registry construction computes `duplicate_group_id` (required, per `PAIR_IDENTITY_AND_DUPLICATE_CONTRACT_v1.md` status update) but does **not** perform Analysis Representative selection or hard-exclusion at step 01 — that is a `02_normalize_and_qc` decision per SSOT §10.1. Step 01's job is only to make duplicate membership *visible and queryable*, not to resolve it. See the 6 scenario policies in `PAIR_IDENTITY_AND_DUPLICATE_CONTRACT_v1.md` §4 — the final Analysis-Representative selection rule remains `WAIT_FOR_TARGETED_EDA_RECON`.
+
+**Vice Director correction — Analysis Representative ≠ semantic covariate source**: whichever record is chosen as Analysis Representative is a **provenance pointer only**. The content-level analysis pair's semantic covariates (starting with `translation_direction`) are **group-resolved** across every member of the `duplicate_group`, not inherited from the representative: a group whose members are all `KO_TO_EN` resolves to `KO_TO_EN`; all `EN_TO_KO` resolves to `EN_TO_KO`; a group containing both resolves to `UNKNOWN` with `direction_conflict_flag=true`. See `PAIR_IDENTITY_AND_DUPLICATE_CONTRACT_v1.md` §0 for the full rule and its generalization caveat (only `translation_direction` has a specified rule so far; `domain`/`source_id` group-conflicts are not yet specified).
+
+**L4-verified evidence now available** (`data/g0-aihub-recon@6e89b9e`, git-remote-confirmed): 025 cross-direction (`EN_TO_KO`×`KO_TO_EN`) distinct-pair-digest overlap = 50,511 of 93,823 total duplicate groups (~54%, confirms direction-mirroring is real but only partially explains the duplication — the remaining ~46% needs separate investigation); project-wide train/validation distinct-digest overlap = 25,247; cross-corpus exact-pair overlap 025↔026=0, 025↔Legacy=35, 026↔Legacy=1; and a flagged Legacy-internal anomaly, `3_문어체_뉴스(2).xlsx`↔`4_문어체_한국문화.xlsx` sharing 2,469 distinct exact-pair digests — recorded as `POTENTIAL_SOURCE_REUSE / COMPOSITION_OVERLAP`, not asserted as an error, root cause not adjudicated here.
 
 ## 8. Split provenance
 
@@ -91,6 +103,11 @@ corpus_tier_assignment:
   "025": A
   "026": A
   legacy: null   # UNASSIGNED, not B -- D-RD-05 explicitly withdraws the earlier tentative-B recommendation
+
+provenance_closure_status:   # Vice Director addendum -- distinct from corpus_tier_assignment above
+  "025": PENDING_OFFICIAL_SCHEMA_AND_RELEASE_LINK
+  "026": PENDING_OFFICIAL_SCHEMA_AND_RELEASE_LINK
+  legacy: PARTIAL_OFFICIAL_CONSTRUCTION_CONFIRMED_FIELD_AND_RELEASE_LINK_PENDING
 
 corpus_role:
   "025": primary_backbone
