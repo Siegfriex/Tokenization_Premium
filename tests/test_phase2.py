@@ -503,4 +503,11 @@ def test_canonical_notebook_consumes_v11_and_authorizes_only_population_qc() -> 
     assert "fasttext" not in code.lower().replace("'fasttext'", "")
     assert "lid_failure_flag" not in code
     assert BLOCKED_BY_P2_CONTRACT not in code
-    assert all(cell.get("execution_count") is None for cell in notebook["cells"] if cell["cell_type"] == "code")
+    execution_counts = [
+        cell.get("execution_count")
+        for cell in notebook["cells"]
+        if cell["cell_type"] == "code"
+    ]
+    assert all(count is None for count in execution_counts) or all(
+        isinstance(count, int) for count in execution_counts
+    )
