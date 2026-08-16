@@ -1,0 +1,58 @@
+{
+  "artifact_id": "INC004_P2_INVALID_V002_v001",
+  "incident_id": "INC-004",
+  "observed_at_kst": "2026-08-16T22:04:50+09:00",
+  "run": {
+    "run_id": "P2_CANONICAL_20260816T211028",
+    "execution_branch": "impl/p2-canonical-run-codex",
+    "execution_code_commit": "a4704fa40ee3a8cc85024e3f053f615d6e0174e8",
+    "terminal_stage": "SAFE_AGGREGATE_REPORTS",
+    "terminal_status": "FAILED",
+    "failure_class": "SCHEMA_CONTRACT_DRIFT_DUCKDB_BINDER_EXCEPTION"
+  },
+  "invalid_artifact": {
+    "canonical_path_before_quarantine": "data/registry/PAIR_REGISTRY_v002.parquet",
+    "bytes": 2954200837,
+    "rows": 5652925,
+    "row_groups": 57,
+    "columns": 69,
+    "sha256": "4a36c8b94b6e05e35d16a980443620063a8b853b4d40539905f0db30ee50c312",
+    "schema_sha256": "41146122886f87defdb4cf7091e20be467bf678ee7c2667746e432bb06e4c1e4",
+    "ordered_field_names": [
+      "pair_id", "source_id", "source_tier", "domain", "sentence_type", "translation_direction",
+      "ko_text_raw", "en_text_raw", "ko_text_nfc", "en_text_nfc", "ko_text_analysis", "en_text_analysis",
+      "pair_quality_status", "pair_quality_score", "pair_version", "source_license_note", "source_record_id",
+      "raw_locator", "duplicate_group_id", "representative_pair_id", "domain_raw", "subdomain_raw",
+      "source_provenance_raw", "is_validation_upstream", "translation_direction_raw",
+      "translation_direction_review_flag", "mt_field_present", "sentence_type_raw",
+      "sentence_type_provenance_status", "normalization_status", "qc_stage_status", "direction_conflict_flag",
+      "domain_conflict_flag", "source_id_conflict_flag", "source_provenance_raw_conflict_flag", "logical_corpus",
+      "canonical_ingest_role", "raw_file_relative_path", "raw_file_sha256", "raw_sheet_name",
+      "raw_physical_row_number", "source_native_id", "source_native_sid", "raw_metadata_json",
+      "normalization_rule_version", "normalization_ops", "unicode_anomaly_flag", "empty_text_flag",
+      "markup_dominant_flag", "control_char_excess_flag", "decode_integrity_flag", "short_text_flag",
+      "long_text_flag", "high_digit_ratio_flag", "high_punctuation_ratio_flag", "script_mix_flag",
+      "translation_quality_review_flag", "lang_side_anomaly_review_flag", "lang_side_anomaly_reason",
+      "ko_lang_side_anomaly_reason", "en_lang_side_anomaly_reason", "named_entity_heavy_flag",
+      "named_entity_evaluation_status", "primary_rejection_reason", "secondary_rejection_flags",
+      "analysis_representative_pair_id", "duplicate_disposition", "analysis_eligible_exact_dedup", "length_stratum"
+    ],
+    "physical_fields_nullable": true,
+    "known_missing_contract_fields": ["exact_duplicate_flag"],
+    "known_type_drift": {
+      "secondary_rejection_flags": {
+        "observed": "extension<arrow.json>",
+        "required": "string"
+      }
+    },
+    "canonical_completion_manifest_present": false,
+    "canonical_evidence_status": "INVALID_FAILED_RUN_EVIDENCE_ONLY"
+  },
+  "heartbeat_path": ".runtime/progress/P2_CANONICAL_20260816T211028/progress.jsonl",
+  "quarantine": {
+    "status": "AUTHORIZED_PENDING_MOVE",
+    "method": "SAME_FILESYSTEM_RENAME_NO_OVERWRITE",
+    "target_path": ".runtime/quarantine/INC-004/P2_CANONICAL_20260816T211028/PAIR_REGISTRY_v002.INVALID.4a36c8b94b6e.parquet"
+  },
+  "research_semantics_changed": false
+}
