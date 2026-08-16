@@ -77,7 +77,37 @@ source_hierarchy:
     B: "benchmark parallel corpus — 연구 benchmark 성격, 규모 작아도 품질 우수"
     C: "web-mined parallel corpus — 대규모 확보용, semantic QC 강화 필요"
   sensitivity_subset: "Tier A/B only"
-  corpus_tier_assignment: null  # AMB-12 — AIHub 등 raw 데이터 canonical ingest 전이므로 미확정. data-recon 완료 후 CR로 결정.
+  # AMB-12 RESOLVED — D-RD-05 (Research Director approved, Vice Director reconfirmed 2026-08-16).
+  # See docs/research/G1_APPROVED_DECISIONS_2026-08-16.md for full rationale/evidence.
+  corpus_tier_assignment:
+    "025": A
+    "026": A
+    legacy: null   # UNASSIGNED, not B — Tier B must not be used as a provenance-shortfall fallback
+
+source_portfolio:
+  spec_ref: "D-RD-05 (AMB-12 resolved), D-RD-05-addendum (provenance_closure_status)"
+  "025":
+    research_role: PRIMARY_BACKBONE
+    primary_analysis_eligible: true
+    provenance_closure_status: PENDING_OFFICIAL_SCHEMA_AND_RELEASE_LINK
+  "026":
+    research_role: PRIMARY_DOMAIN_SUPPLEMENT
+    primary_analysis_eligible: true
+    provenance_closure_status: PENDING_OFFICIAL_SCHEMA_AND_RELEASE_LINK
+    condition: "domain-specialized, KO_TO_EN single direction; never pooled with 025 without an explicit stratum label"
+  legacy:
+    research_role: SENSITIVITY_ONLY
+    primary_analysis_eligible: false
+    provenance_closure_status: PARTIAL_OFFICIAL_CONSTRUCTION_CONFIRMED_FIELD_AND_RELEASE_LINK_PENDING
+  d71693:
+    status: NOT_ACQUIRED
+    scope: OUTSIDE_CURRENT_CORPUS
+
+primary_cohort_policy:
+  spec_ref: "D-RD-08 (AMB-05 resolved)"
+  mode: all_qc_accepted_tier_a   # 025+026 pairs that are G1 ingest-valid + G2/QC-accepted + exact-duplicate-policy-surviving + Tier-A eligible
+  fixed_n_cap: null              # no arbitrary cap, no pre-analysis sampling, no convenience cap; SSOT's 100,000+ is a floor not a ceiling
+  final_n: null                  # realized value, populated only after the QC/dedup pipeline actually runs
 
 taxonomies:
   domain:
@@ -93,6 +123,22 @@ taxonomies:
     spec_ref: "§9.2 + D-RD-01 (AMB-04 resolved)"
     basis: "EN codepoint count"
     binning: quintile
+
+translation_direction_defaults:
+  spec_ref: "D-RD-06"
+  "025": [KO_TO_EN, EN_TO_KO]   # per raw provenance (ko_original/en_original + source_language/target_language consistency)
+  "026": [KO_TO_EN]              # single direction only, no reverse-direction file exists
+  legacy: UNKNOWN                 # NOT HUMAN_PARALLEL_UNKNOWN — current evidence does not confirm human-parallel construction
+  group_resolution_rule:          # Vice Director addendum — applies when a duplicate_group spans multiple raw records
+    single_value_set: "that value"
+    mixed_value_set: "UNKNOWN + direction_conflict_flag=true"
+
+domain_mapping_top_level:
+  spec_ref: "D-RD-07"
+  note: "Top-level only. subdomain_raw/domain_raw are always preserved verbatim alongside; subdomains are never mapped to canonical form."
+  "025": {일상생활: general, 해외고객과의채팅: dialogue, 해외영업: other}
+  "026": {기술과학: technology, 세계: other, 경제: other, 정치: other, 기후: other}
+  legacy: {구어체: general, 대화체: dialogue, 뉴스: news, 한국문화: other, 조례: legal, 지자체웹사이트: administration}
 
 analysis_unit:
   spec_ref: "§7.1"
@@ -250,6 +296,42 @@ track_b_status:
   note: "재개 시점에 exact provider/model ID, revision, API semantics, reasoning telemetry, request/final token accounting, latency observability, cost를 그때 다시 evidence-grounded freeze한다. 현재 세부값은 추측하여 채우지 않는다."
   affected_artifacts: ["T07", "F09"]
   unaffected: "Track A (RQ1-RQ6, notebooks 00-11) — 영향 없음"
+
+d01_field_contract:
+  spec_ref: "§12.1, G1 canonical freeze — see docs/contracts/G1_PAIR_REGISTRY_PRECONTRACT_v1.md for full rationale"
+  sentence_type:
+    rule: "preserve sentence_type_raw verbatim if source supplies it; otherwise canonical sentence_type=other"
+    provenance_status_field: "sentence_type_provenance_status = UNAVAILABLE_IN_RAW_SOURCE when no source metadata exists"
+    forbidden: "inferring sentence_type from punctuation at ingest when no explicit source metadata exists"
+  normalization_fields:
+    design: "Phase1 creates nullable ko_text_nfc/en_text_nfc/ko_text_analysis/en_text_analysis columns with normalization_status=NOT_GENERATED_PHASE1; Phase2 (02_normalize_and_qc) populates them into a new pair-registry version, not by mutating Phase1's frozen registry in place"
+  pair_quality_status:
+    phase1_value: review   # never 'accepted' before semantic QC has run
+    auxiliary_field: "qc_stage_status = PENDING_PHASE2"
+  pair_quality_score:
+    phase1_value: null   # populated only after semantic-alignment measurement (§10.3)
+  pair_version:
+    syntax: "v001 (zero-padded 3-digit integer, per SSOT §38 file-naming convention); increments on any registry-affecting schema or ingest-scope change"
+  duplicate_representative:
+    selector: "lexicographically minimum pair_id within duplicate_group_id (or an equivalent stable canonical raw-locator order)"
+    forbidden_preferences: ["train over validation", "a translation direction", "a domain", "source_provenance_raw", "tier", "text length"]
+    conflict_flags: [direction_conflict_flag, domain_conflict_flag, source_id_conflict_flag, source_provenance_raw_conflict_flag]
+    note: "representative_pair_id is a provenance pointer only; it never supplies the analysis-time semantic covariates for its duplicate_group — those are group-resolved (see translation_direction_defaults.group_resolution_rule above; domain/source_id group-conflict resolution rules are not yet specified beyond the conflict flags themselves)"
+
+identifiability_gate_minimum_diagnostics:
+  spec_ref: "§20.2 Gate G-ID, directive-mandated additions"
+  required_crosstabs:
+    - "source_id x canonical_domain"
+    - "source_id x translation_direction"
+    - "source_provenance_raw x canonical_domain"
+    - "source_provenance_raw x translation_direction"
+  already_confirmed_confound: "026: domain=기술과학 numerically identical to source_provenance_raw=특허정보원 (and the other four 026 domains identical to 한국연구재단) — not separably estimable as currently structured; M0-M3 statistical redesign is NOT decided here, this is a hard precondition for whoever runs that modeling"
+
+auxiliary_notebook_namespace:
+  spec_ref: "directive-mandated, 2026-08-16"
+  canonical_phase1_notebook: "notebooks/01_build_pair_registry.ipynb"
+  non_canonical_evidence_notebook_sanitized_path: "notebooks/exploratory/evidence/AIHUB_LOCAL_RECON_EVIDENCE_EXPORT_20260816.ipynb"
+  note: "any notebook named notebooks/01_aihub_local_recon_evidence_export.ipynb is NOT canonical Phase1 and must not be confused with it; as of this freeze, no such notebook exists yet in any fetched branch"
 
 traceability_matrix:
   spec_ref: "§34"

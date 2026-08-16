@@ -49,3 +49,15 @@ AMB-05 is no longer "pick a target N." Primary analysis cohort = every 025+026 p
 8. G0/`main` lineage untouched — confirmed, this worktree only ever writes to `research/g1-prep-claude`.
 
 Full detail: `docs/research/PAIR_IDENTITY_AND_DUPLICATE_CONTRACT_v1.md` and `docs/research/AIHUB_LOCAL_WEB_RECONCILIATION_v1.md` (both updated in place with status banners, nothing rewritten silently).
+
+## Canonical G1 Freeze (2026-08-16) — migration off `research/g1-prep-claude`
+
+Per Director instruction, work moved off the diverged `research/g1-prep-claude` (last SHA `970a52e`) onto `research/g1-claude`, branched fresh from canonical `main@f1b2a90` (verified via `git fetch` before branching, not assumed). The three research-only commits (`a3d2c45`, `1ba3baa`, `970a52e` — all touching only `docs/contracts/**`/`docs/research/**`, verified before porting) were cherry-picked cleanly, zero conflicts. `research/g1-prep-claude` itself is retired, not merged.
+
+**Now applied** (previously deferred as `PROPOSED_G1_CONFIG_DELTA` because G0 wasn't canonical yet): D-RD-05 through D-RD-08 are live in `configs/research_v1.yaml` on `research/g1-claude` — `source_hierarchy.corpus_tier_assignment`, `source_portfolio`, `primary_cohort_policy`, `translation_direction_defaults`, `domain_mapping_top_level`, applied exactly as approved, not reinterpreted.
+
+**D-01 gaps closed** (`docs/contracts/G1_PAIR_REGISTRY_PRECONTRACT_v1.md` §16, mirrored in `configs/research_v1.yaml.d01_field_contract`): `sentence_type` (raw-preserve or `other`+`UNAVAILABLE_IN_RAW_SOURCE`, never punctuation-inferred), the four NFC/analysis text fields (nullable at Phase 1, `normalization_status=NOT_GENERATED_PHASE1`, populated by Phase 2 into a new registry version — not an in-place mutation), `pair_quality_status` (`review` + `qc_stage_status=PENDING_PHASE2`, never `accepted` pre-QC), `pair_quality_score` (`null` until semantic-alignment measurement), `pair_version` (`v001` syntax per SSOT §38).
+
+**Duplicate representative rule finalized**: `representative_pair_id = lexicographically minimum pair_id` within a `duplicate_group_id`, deterministic, explicitly barred from preferring train/validation, direction, domain, source, tier, or text length. New conflict flags added for group-level `domain`/`source_id`/`source_provenance_raw` disagreement (no resolution rule for these yet — only `translation_direction` has one).
+
+**`docs/contracts/G1_PAIR_REGISTRY_PRECONTRACT_v1.md` is now IMPLEMENTATION-READY** — no further Director decision is expected before Codex begins `01_build_pair_registry.ipynb`. `docs/research/G1_DECISION_QUEUE_v1.md` was trimmed to the three genuinely unresolved categories: official provenance closure, Legacy composition interpretation, and later Phase 2 semantic QC outcomes.

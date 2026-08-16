@@ -1,6 +1,6 @@
 # G1 Pair Registry Precontract — v1
 
-This is **not** an implementation spec for `01_build_pair_registry.ipynb` and contains no code. It fixes the research semantics that any implementation of that notebook must satisfy. It draws on `docs/research/PAIR_IDENTITY_AND_DUPLICATE_CONTRACT_v1.md`, `docs/research/DIRECTION_AND_DOMAIN_MAPPING_PRECONTRACT_v1.md`, `docs/research/AIHUB_LOCAL_WEB_RECONCILIATION_v1.md`, and SSOT §9-12.
+**Status: IMPLEMENTATION-READY (2026-08-16).** This still contains no code and is not itself the `01_build_pair_registry.ipynb` implementation — but every D-01 field's Phase-1 semantics are now frozen (§16), the config delta is applied to `configs/research_v1.yaml` on canonical `research/g1-claude` (§15), and the duplicate representative rule is finalized (§7). No further Research Director decision is expected before Codex implements `01_build_pair_registry.ipynb` against this contract. It draws on `docs/research/PAIR_IDENTITY_AND_DUPLICATE_CONTRACT_v1.md`, `docs/research/DIRECTION_AND_DOMAIN_MAPPING_PRECONTRACT_v1.md`, `docs/research/AIHUB_LOCAL_WEB_RECONCILIATION_v1.md`, and SSOT §9-12.
 
 ## 0. The 01 / 02 boundary (do not confuse)
 
@@ -11,11 +11,11 @@ A record that ingests successfully but is a duplicate, or has anomalous-but-pars
 
 ## 1. Source acquisition identity
 
-Each of the 3 currently-known local dataset families (025, 026, Legacy) gets one `source_id`. `source_id` must carry: local family label, ingest snapshot reference (pointing to the `RAW_FILE_MANIFEST_SHA` data-recon already computed — `9a546bc9...c1f0c`), and a placeholder for the official AIHub `dataSetSn` (currently unconfirmed — AMB-12/OPEN, do not fabricate one). D71693 has no `source_id` yet — it is `NOT_ACQUIRED`.
+Each of the 3 currently-known local dataset families (025, 026, Legacy) gets one `source_id`. `source_id` must carry: local family label, ingest snapshot reference (pointing to the `RAW_FILE_MANIFEST_SHA` data-recon already computed — `9a546bc9...c1f0c`), and a placeholder for the official AIHub `dataSetSn` (still unconfirmed — `provenance_closure_status` tracks this separately from the now-resolved `source_tier`; do not fabricate a `dataSetSn`). D71693 has no `source_id` yet — it is `NOT_ACQUIRED`.
 
 ## 2. Source registry & license note
 
-Per D-01 schema (§12.1): `source_id`, `source_tier`, `source_license_note`. **`source_tier` values are now Director-approved (D-RD-05, NOT withdrawn — Vice Director reconfirmed 2026-08-16)** — 025=A, 026=A, Legacy=`null`/UNASSIGNED (not B — the earlier tentative-B recommendation was explicitly withdrawn; Tier B must not be used as a provenance-shortfall fallback). **These values are not yet written into `configs/research_v1.yaml`** — see §15 `PROPOSED_G1_CONFIG_DELTA` below; that file is intentionally left untouched this round to avoid mixing pre-canonical-integration lineage with the G0 canonical tree.
+Per D-01 schema (§12.1): `source_id`, `source_tier`, `source_license_note`. **`source_tier` values are now Director-approved (D-RD-05, NOT withdrawn — Vice Director reconfirmed 2026-08-16) and APPLIED** — 025=A, 026=A, Legacy=`null`/UNASSIGNED (not B — the earlier tentative-B recommendation was explicitly withdrawn; Tier B must not be used as a provenance-shortfall fallback). **These values are now written into `configs/research_v1.yaml`** (`source_hierarchy.corpus_tier_assignment`, `source_portfolio`) on canonical `research/g1-claude` — see §15.
 
 **New field (Vice Director addendum): `provenance_closure_status`** — separate from `source_tier`, tracks how closed the official-provenance loop is:
 - 025, 026: `PENDING_OFFICIAL_SCHEMA_AND_RELEASE_LINK`
@@ -47,9 +47,13 @@ The JSON/XLSX raw `source` field (observed values: `SBS`, `크라우드 소싱`,
 
 ## 7. Duplicate group semantics & exact-duplicate handling candidates
 
-Registry construction computes `duplicate_group_id` (required, per `PAIR_IDENTITY_AND_DUPLICATE_CONTRACT_v1.md` status update) but does **not** perform Analysis Representative selection or hard-exclusion at step 01 — that is a `02_normalize_and_qc` decision per SSOT §10.1. Step 01's job is only to make duplicate membership *visible and queryable*, not to resolve it. See the 6 scenario policies in `PAIR_IDENTITY_AND_DUPLICATE_CONTRACT_v1.md` §4 — the final Analysis-Representative selection rule remains `WAIT_FOR_TARGETED_EDA_RECON`.
+Registry construction computes `duplicate_group_id` (required, per `PAIR_IDENTITY_AND_DUPLICATE_CONTRACT_v1.md` status update) but does **not** perform hard-exclusion at step 01 — that is a `02_normalize_and_qc` decision per SSOT §10.1. Step 01's job is only to make duplicate membership *visible and queryable*. See the 6 scenario policies in `PAIR_IDENTITY_AND_DUPLICATE_CONTRACT_v1.md` §4.
 
-**Vice Director correction — Analysis Representative ≠ semantic covariate source**: whichever record is chosen as Analysis Representative is a **provenance pointer only**. The content-level analysis pair's semantic covariates (starting with `translation_direction`) are **group-resolved** across every member of the `duplicate_group`, not inherited from the representative: a group whose members are all `KO_TO_EN` resolves to `KO_TO_EN`; all `EN_TO_KO` resolves to `EN_TO_KO`; a group containing both resolves to `UNKNOWN` with `direction_conflict_flag=true`. See `PAIR_IDENTITY_AND_DUPLICATE_CONTRACT_v1.md` §0 for the full rule and its generalization caveat (only `translation_direction` has a specified rule so far; `domain`/`source_id` group-conflicts are not yet specified).
+**Analysis-Representative selection — FINALIZED (2026-08-16, targeted EDA/recon now sufficient per directive)**: `representative_pair_id = lexicographically minimum pair_id within duplicate_group_id` (or an equivalent stable canonical raw-locator ordering — the exact string-sort implementation is Codex's call, but it must be deterministic and carry **no semantic preference**). Explicitly **forbidden** as a selection criterion: preferring train over validation, a specific translation direction, a specific domain, a specific `source_provenance_raw`, a specific tier, or longer/shorter text — any of these would silently bias which record's provenance gets cited, even though (per the correction below) it doesn't bias the analysis covariates themselves.
+
+**Vice Director correction — Analysis Representative ≠ semantic covariate source**: whichever record is chosen as Analysis Representative is a **provenance pointer only** (which raw row's lineage the accepted content-level pair cites). The content-level analysis pair's semantic covariates are **group-resolved** across every member of the `duplicate_group`, not inherited from the representative:
+- `translation_direction`: all-`KO_TO_EN` → `KO_TO_EN`; all-`EN_TO_KO` → `EN_TO_KO`; mixed → `UNKNOWN` + `direction_conflict_flag=true`.
+- `domain`, `source_id`, `source_provenance_raw`: no group-resolution value-selection rule is specified yet (only `translation_direction` has one) — instead, any group containing more than one distinct value on these axes must set the corresponding flag (`domain_conflict_flag`, `source_id_conflict_flag`, `source_provenance_raw_conflict_flag`) and **must not** be silently resolved from the representative row. Picking an actual resolved value for these three is a follow-on design question, not answered here.
 
 **L4-verified evidence now available** (`data/g0-aihub-recon@6e89b9e`, git-remote-confirmed): 025 cross-direction (`EN_TO_KO`×`KO_TO_EN`) distinct-pair-digest overlap = 50,511 of 93,823 total duplicate groups (~54%, confirms direction-mirroring is real but only partially explains the duplication — the remaining ~46% needs separate investigation); project-wide train/validation distinct-digest overlap = 25,247; cross-corpus exact-pair overlap 025↔026=0, 025↔Legacy=35, 026↔Legacy=1; and a flagged Legacy-internal anomaly, `3_문어체_뉴스(2).xlsx`↔`4_문어체_한국문화.xlsx` sharing 2,469 distinct exact-pair digests — recorded as `POTENTIAL_SOURCE_REUSE / COMPOSITION_OVERLAP`, not asserted as an error, root cause not adjudicated here.
 
@@ -93,43 +97,22 @@ Before G1/G5 allow any independent-effect interpretation of `domain`, `source_id
 
 Per SSOT Gate G-ID (§20.2): if domain and source (raw or canonical) are structurally unidentifiable, do not force a coefficient table — redesign (e.g., treat `domain` and `source_provenance_raw` as a single composite factor for 026, or restrict domain-effect claims to 025 only where more variation exists). This redesign decision is **not made here** — it is deferred to whoever runs the actual M0-M3 model fitting, with this gate as a hard precondition.
 
-## 15. PROPOSED_G1_CONFIG_DELTA (not applied — `configs/research_v1.yaml` untouched this round)
+## 15. G1_CONFIG_DELTA — APPLIED to `configs/research_v1.yaml` (2026-08-16, canonical `research/g1-claude`)
 
-Per Director instruction (config change policy, directive §9): `research/g1-prep-claude` branched before G0 canonical integration, so editing `configs/research_v1.yaml` here risks mixing G0/G1 lineage. The values below are the machine-readable delta to apply **once a Vice Director sequences it onto the canonical G0 base** — this is a specification, not a file edit.
+Now that G0 is canonical (merged to `main@f1b2a90`), the delta previously proposed on the diverged `research/g1-prep-claude` branch has been applied to `configs/research_v1.yaml` on this branch: `source_hierarchy.corpus_tier_assignment`, `source_portfolio` (role/eligibility/`provenance_closure_status`), `primary_cohort_policy`, `translation_direction_defaults`, `domain_mapping_top_level`, `d01_field_contract` (§16 below), `identifiability_gate_minimum_diagnostics`, and `auxiliary_notebook_namespace` are all live in that file — it is the authoritative machine-readable source, not this section. D-RD-05 through D-RD-08 are applied **exactly as approved, not reinterpreted**.
 
-```yaml
-# PROPOSED_G1_CONFIG_DELTA -- apply onto configs/research_v1.yaml AFTER G0 canonical PASS, not before.
-corpus_tier_assignment:
-  "025": A
-  "026": A
-  legacy: null   # UNASSIGNED, not B -- D-RD-05 explicitly withdraws the earlier tentative-B recommendation
+## 16. D-01 field-by-field Phase-1 semantics (directive-mandated, closes remaining D-01 gaps)
 
-provenance_closure_status:   # Vice Director addendum -- distinct from corpus_tier_assignment above
-  "025": PENDING_OFFICIAL_SCHEMA_AND_RELEASE_LINK
-  "026": PENDING_OFFICIAL_SCHEMA_AND_RELEASE_LINK
-  legacy: PARTIAL_OFFICIAL_CONSTRUCTION_CONFIRMED_FIELD_AND_RELEASE_LINK_PENDING
+**A. `sentence_type`**: preserve `sentence_type_raw` verbatim if the source supplies explicit metadata; otherwise canonical `sentence_type = other`. A separate `sentence_type_provenance_status = UNAVAILABLE_IN_RAW_SOURCE` records when no source metadata exists. **Forbidden**: inferring sentence type from punctuation at ingest when the source provides no explicit metadata — none of 025/026/Legacy's schemas carry a sentence-type field, so on current evidence this will be `other`/`UNAVAILABLE_IN_RAW_SOURCE` for all three at Phase 1.
 
-corpus_role:
-  "025": primary_backbone
-  "026": primary_domain_supplement
-  legacy: sensitivity_only
+**B. `ko_text_nfc`/`en_text_nfc`/`ko_text_analysis`/`en_text_analysis`**: SSOT lists these as D-01 fields, but normalization is Phase 2's job (`02_normalize_and_qc`). **Design (chosen, not left implicit for Codex)**: Phase 1 creates these four columns **nullable**, with `normalization_status = NOT_GENERATED_PHASE1`. Phase 2 populates them into a **new pair-registry version** (or a deterministic derived artifact keyed by `pair_id`) — it does not mutate Phase 1's frozen registry file in place. This preserves Phase 1's reproducibility (re-running `01_build_pair_registry` alone always yields the same nullable-column registry) independent of whatever normalization rules Phase 2 later applies or revises.
 
-corpus_primary_analysis_eligible:
-  "025": true
-  "026": true
-  legacy: false
+**C. `pair_quality_status`**: SSOT allows only `accepted`/`review`/`rejected`. At Phase 1, full semantic QC (§10.3) has not run yet, so **no record may be `accepted` at this stage**. Phase 1 value = `review` for every structurally-ingestible record, plus an auxiliary `qc_stage_status = PENDING_PHASE2` making explicit that "review" here means "not yet QC'd," not "flagged for concern."
 
-primary_cohort_policy:
-  mode: all_qc_accepted_tier_a   # D-RD-08 -- no arbitrary cap, no pre-analysis sampling
-  fixed_n_cap: null
+**D. `pair_quality_score`**: `null` at Phase 1 — populated only after semantic-alignment measurement (§10.3) runs in a later phase.
 
-translation_direction_defaults:
-  "025": [KO_TO_EN, EN_TO_KO]   # per raw provenance, D-RD-06
-  "026": [KO_TO_EN]
-  legacy: UNKNOWN                # D-RD-06 -- not HUMAN_PARALLEL_UNKNOWN
+**E. `pair_version`**: syntax `v001` (zero-padded 3-digit integer, matching SSOT §38's file-naming convention, e.g. `PAIR_REGISTRY_v001.parquet`), incrementing on any registry-affecting schema or ingest-scope change.
 
-domain_mapping_top_level:        # D-RD-07 -- subdomains stay raw-only, never mapped
-  "025": {일상생활: general, 해외고객과의채팅: dialogue, 해외영업: other}
-  "026": {기술과학: technology, 세계: other, 경제: other, 정치: other, 기후: other}
-  legacy: {구어체: general, 대화체: dialogue, 뉴스: news, 한국문화: other, 조례: legal, 지자체웹사이트: administration}
-```
+## 17. Auxiliary notebook namespace
+
+`notebooks/01_build_pair_registry.ipynb` remains the **only** canonical Phase-1 notebook. Any notebook named `notebooks/01_aihub_local_recon_evidence_export.ipynb` is **not** canonical Phase 1 — its sanctioned, sanitized destination is `notebooks/exploratory/evidence/AIHUB_LOCAL_RECON_EVIDENCE_EXPORT_20260816.ipynb`. As of this freeze, no such notebook exists in any fetched branch (`main`, `integration/g0`, `impl/g0-codex`, `data/g0-aihub-recon`, `eda/g0-raw-notebooks` all checked, read-only) — this is a naming contract for if/when one is created, not a correction of an existing file.
