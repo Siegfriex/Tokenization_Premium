@@ -1,0 +1,6 @@
+﻿direction,raw_source,raw_domain,record_count,eda_interpretation
+EN_TO_KO,크라우드 소싱,일상생활,449952,distinct raw categorical strings; spelling/provenance equivalence requires documentation
+EN_TO_KO,크라우드 소싱,해외고객과의채팅,270138,distinct raw categorical strings; spelling/provenance equivalence requires documentation
+EN_TO_KO,크라우드 소싱,해외영업,630255,distinct raw categorical strings; spelling/provenance equivalence requires documentation
+KO_TO_EN,크라우드소싱,해외고객과의채팅,270083,distinct raw categorical strings; spelling/provenance equivalence requires documentation
+KO_TO_EN,크라우드소싱,해외영업,630112,distinct raw categorical strings; spelling/provenance equivalence requires documentation

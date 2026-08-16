@@ -1,0 +1,7 @@
+﻿mechanism,candidate_row_count,candidate_group_count,definition
+within EN_TO_KO,26525,4543,"sum(max(n-1,0)) within direction"
+within KO_TO_EN,137216,39603,"sum(max(n-1,0)) within direction"
+EN_TO_KO <-> KO_TO_EN,50529,50511,"sum(min(n_EN_TO_KO,n_KO_TO_EN)); cross-direction matchable rows"
+within TRAIN,164170,71932,"sum(max(n-1,0)) within split"
+within VALID,24844,5014,"sum(max(n-1,0)) within split"
+TRAIN <-> VALID,36089,25238,"sum(min(n_TRAIN,n_VALID)); cross-split matchable rows"
