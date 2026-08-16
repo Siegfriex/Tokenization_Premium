@@ -7,9 +7,18 @@ import json  # temporary ingest contract를 UTF-8 JSON으로 저장한다.
 import struct  # independent u64be length prefix를 만든다.
 from pathlib import Path  # pytest temporary file 경로를 처리한다.
 
+import pytest  # invalid runtime override의 fail-fast contract를 검사한다.
 import yaml  # temporary research config를 YAML로 저장한다.
 
-from tokenization_premium.registry import canonical_json_text, duplicate_group_id, load_contracts, provenance_pair_id, source_id_for  # D-01 pure functions를 검증한다.
+from tokenization_premium.registry import (  # D-01 pure functions와 runtime safety setting을 검증한다.
+    DUCKDB_MEMORY_LIMIT_ENV,
+    canonical_json_text,
+    duplicate_group_id,
+    load_contracts,
+    provenance_pair_id,
+    resolve_duckdb_memory_limit,
+    source_id_for,
+)
 from tokenization_premium.schemas import pair_registry_schema, source_registry_schema, staging_registry_schema  # registry schema 계약을 검증한다.
 
 
@@ -128,3 +137,20 @@ def test_load_contracts_requires_exact_g1_bundle(tmp_path: Path) -> None:
     observed_research, observed_ingest = load_contracts(research_path, ingest_path)  # production loader로 두 fixture를 읽는다.
     assert observed_research == research  # research config가 임의 변형되지 않았는지 확인한다.
     assert observed_ingest == ingest  # ingest contract가 임의 변형되지 않았는지 확인한다.
+
+
+def test_duckdb_memory_limit_resolution_is_safe_and_overridable() -> None:
+    """
+    /**
+     * @purpose DuckDB memory policy가 8GB 기본값, 6GB override, invalid fail-fast를 지키는지 검사한다.
+     * @spec_ref INC-001 post-incident runtime safety hardening
+     * @return None
+     * @raises AssertionError 또는 ValueError contract가 깨진 경우
+     * @validation pure environment-mapping resolution; DuckDB/registry ingest 미실행
+     * @artifact 없음
+     */
+    """
+    assert resolve_duckdb_memory_limit({}) == "8GB"  # override가 없으면 새 research-job 기본 상한을 확인한다.
+    assert resolve_duckdb_memory_limit({DUCKDB_MEMORY_LIMIT_ENV: " 6gb "}) == "6GB"  # 보수적 동시 실행 override의 공백/case를 정규화한다.
+    with pytest.raises(ValueError, match=DUCKDB_MEMORY_LIMIT_ENV):  # 임의 SQL 또는 단위 없는 값은 실행 전에 거부해야 한다.
+        resolve_duckdb_memory_limit({DUCKDB_MEMORY_LIMIT_ENV: "12GB; DROP TABLE registry"})
