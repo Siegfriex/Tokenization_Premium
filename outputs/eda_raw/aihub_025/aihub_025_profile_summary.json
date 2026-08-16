@@ -1,0 +1,22 @@
+{
+  "dataset_local_id": "AIHUB_025",
+  "dataset_title": "AIHub 025 일상생활·구어체 한–영 병렬 말뭉치",
+  "audit_timestamp": "2026-08-16T14:09:02+09:00",
+  "audit_completed_timestamp": "2026-08-16T14:09:58+09:00",
+  "raw_dir": "/home/sieg/projects-wsl/Tokenization_Premium/data/raw/aigub/025.일상생활 및 구어체 한-영 번역 병렬 말뭉치 데이터",
+  "physical_file_count": 9,
+  "unique_content_file_count": 5,
+  "profiled_unique_data_files": 4,
+  "logical_record_count": 2700345,
+  "sample_record_count": 27115,
+  "population_scope": "FULL POPULATION AGGREGATES over unique SHA-256 JSON/XLSX content",
+  "sample_method": "deterministic BLAKE2b(seed=20260816) hash threshold 10/1000 (~1%); scatter/sample only",
+  "notebook_status": "SUPPORTING / EXPLORATORY / PRE-INGESTION EDA / NOT G1 PASS",
+  "raw_file_manifest_sha": "0571de91329994a1c9c703e58314457bdbcb6e30ed9380ec347c3f73d1269b13",
+  "stability_counts": {
+    "STABLE_FILE": 9,
+    "DOWNLOAD_IN_PROGRESS": 0,
+    "PARTIAL_DOWNLOAD": 0,
+    "UNKNOWN": 0
+  }
+}
