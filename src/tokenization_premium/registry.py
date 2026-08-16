@@ -7,6 +7,7 @@ import datetime as dt  # workbook 날짜 값을 손실 없는 ISO 문자열로 �
 import hashlib  # provenance identity와 exact raw content identity의 SHA-256을 계산한다.
 import json  # raw locator와 metadata를 canonical JSON 문자열로 보존한다.
 import os  # 완성된 artifact를 atomic replace한다.
+import re  # DuckDB memory override를 제한된 size 문법으로 검증한다.
 import struct  # identity 문자열의 UTF-8 byte 길이를 unsigned 64-bit big-endian으로 직렬화한다.
 import subprocess  # artifact에 연결할 Git commit을 read-only 조회한다.
 from collections.abc import Iterator, Mapping, Sequence  # streaming record 및 contract container 타입을 표현한다.
@@ -28,6 +29,9 @@ PAIR_VERSION = "v001"  # SSOT §38의 zero-padded registry version을 고정한�
 PAIR_REGISTRY_SCHEMA_VERSION = "PAIR_REGISTRY_v001"  # manifest에 기록할 pair schema version을 고정한다.
 SOURCE_REGISTRY_SCHEMA_VERSION = "SOURCE_REGISTRY_v001"  # manifest에 기록할 source schema version을 고정한다.
 BATCH_SIZE = 25_000  # streaming writer의 bounded-memory row batch 크기를 고정한다.
+DEFAULT_DUCKDB_MEMORY_LIMIT = "8GB"  # INC-001 이후 15GiB WSL 환경에 맞춘 보수적 기본 상한을 고정한다.
+DUCKDB_MEMORY_LIMIT_ENV = "TOKENIZATION_PREMIUM_DUCKDB_MEMORY_LIMIT"  # 명시적 operator override 환경변수 이름을 고정한다.
+_DUCKDB_MEMORY_LIMIT_PATTERN = re.compile(r"(?P<amount>[1-9][0-9]*)\s*(?P<unit>KB|MB|GB|TB)", re.IGNORECASE)  # SQL에 안전한 양의 정수 memory-size 문법만 허용한다.
 SOURCE_ID_LABELS = {"025": "025-family", "026": "026-family", "LEGACY": "Legacy-family"}  # 공식 dataSetSn을 조작하지 않는 local family label을 고정한다.
 LEGACY_ROLE_DOMAIN = {  # workbook role에서 Director 승인 raw top-level label을 결정한다.
     "LEGACY_1_구어체(1)": "구어체",  # 첫 구어체 workbook을 general mapping의 raw label에 연결한다.
@@ -587,6 +591,26 @@ def _sql_path(path: Path) -> str:
     return str(path.resolve()).replace("'", "''")  # SQL literal delimiter와 충돌하는 apostrophe만 두 번 쓴다.
 
 
+def resolve_duckdb_memory_limit(environ: Mapping[str, str] | None = None) -> str:
+    """
+    /**
+     * @purpose DuckDB research-job memory cap을 안전한 기본값 또는 명시적 환경 override에서 결정한다.
+     * @spec_ref INC-001 post-incident reproducibility engineering policy
+     * @param environ 테스트 가능한 환경 mapping; None이면 process environment
+     * @return 정규화된 DuckDB memory size 문자열
+     * @raises ValueError override가 양의 정수 KB/MB/GB/TB 형식이 아닌 경우
+     * @validation default=8GB, conservative override=6GB, invalid override fail-fast 단위 테스트
+     * @artifact 없음
+     */
+    """
+    source = os.environ if environ is None else environ  # production 환경과 주입된 test mapping을 명확히 분리한다.
+    raw_value = source.get(DUCKDB_MEMORY_LIMIT_ENV, DEFAULT_DUCKDB_MEMORY_LIMIT)  # override가 없으면 안전한 8GB 기본값을 사용한다.
+    match = _DUCKDB_MEMORY_LIMIT_PATTERN.fullmatch(raw_value.strip())  # 공백 외 추가 token이나 SQL 구문을 허용하지 않는다.
+    if match is None:  # 지원하지 않는 값은 DuckDB 실행 전에 중단해야 한다.
+        raise ValueError(f"{DUCKDB_MEMORY_LIMIT_ENV} must be a positive integer followed by KB, MB, GB, or TB; got {raw_value!r}")  # 오타와 unsafe override를 fail-fast한다.
+    return f"{match.group('amount')}{match.group('unit').upper()}"  # case/공백 차이를 제거해 manifest-independent runtime setting을 만든다.
+
+
 def finalize_registry(staging_path: Path, final_path: Path, runtime_dir: Path) -> None:
     """
     /**
@@ -609,6 +633,7 @@ def finalize_registry(staging_path: Path, final_path: Path, runtime_dir: Path) -
     staging_literal = _sql_path(staging_path)  # staging absolute path를 SQL literal용으로 escape한다.
     output_literal = _sql_path(temporary)  # partial output absolute path를 SQL literal용으로 escape한다.
     runtime_literal = _sql_path(runtime_dir)  # spill directory absolute path를 SQL literal용으로 escape한다.
+    memory_limit = resolve_duckdb_memory_limit()  # 8GB 기본값 또는 검증된 operator override를 실행 직전에 확정한다.
     group_derived = {  # 최종 schema에서 group resolution SQL 표현이 필요한 columns를 정의한다.
         "translation_direction": "CASE WHEN g.direction_value_count = 1 THEN g.single_direction ELSE 'UNKNOWN' END AS translation_direction",
         "representative_pair_id": "g.representative_pair_id AS representative_pair_id",
@@ -644,7 +669,7 @@ def finalize_registry(staging_path: Path, final_path: Path, runtime_dir: Path) -
     connection = duckdb.connect()  # 외부 DB state 없는 in-memory DuckDB connection을 만든다.
     try:  # 성공/실패와 무관하게 connection을 닫기 위한 보호 구간을 시작한다.
         connection.execute("SET preserve_insertion_order = false")  # 대용량 group/sort의 불필요한 insertion-order memory 비용을 줄인다.
-        connection.execute("SET memory_limit = '12GB'")  # host RAM을 독점하지 않으면서 spill 가능한 상한을 고정한다.
+        connection.execute(f"SET memory_limit = '{memory_limit}'")  # 검증된 runtime cap으로 host memory pressure를 제한한다.
         connection.execute(f"SET temp_directory = '{runtime_literal}'")  # project-contained 경로에만 spill하도록 제한한다.
         connection.execute(query)  # group-resolution과 canonical Parquet 생성을 실행한다.
     finally:  # query 결과와 무관하게 DuckDB resource를 해제한다.
