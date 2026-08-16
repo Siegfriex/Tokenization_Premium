@@ -16,7 +16,7 @@ SSOT(KOEN-TP-RS-001 v1.0)를 `docs/contracts/RESEARCH_CONTRACT_v1.md`로 옮기�
 | AMB-10 | VIF/GVIF 임계값 | §20.2, §21 | **RESOLVED (D-RD-01)** | warning≥5, severe≥10, VIF 단독 자동 삭제는 여전히 금지 |
 | AMB-11 | Quantile regression 분석 분위수 | §22 | **RESOLVED (D-RD-01)** | reference=0.50, primary upper-tail=0.90, sensitivity=0.95 |
 | AMB-12 | Source tier ↔ 실제 corpus 매핑 | §9.3 | **OPEN** | AIHub 등 raw 데이터가 canonical ingest 공식 보고 전까지 의도적으로 미확정 |
-| AMB-13 | `src/koen_tp/visualization.py` 소재 | Notebook Constitution vs SSOT §36 IA | 미해결(저위험) | `src/**` WRITE 금지라 불일치만 기록, 모듈 생성 미제안 |
+| AMB-13 | `src/koen_tp/visualization.py` 소재 | Notebook Constitution vs SSOT §36 IA | **RESOLVED_NON_BLOCKING_IMPLEMENTATION_EXTENSION** (2026-08-16, read-only 확인) | `origin/impl/g0-codex`의 `src/tokenization_premium/visualization.py`를 읽기전용 확인함: 한글 font 탐색(`find_korean_font`, Noto Sans CJK KR→Noto Sans KR→NanumGothic 우선순위) + PNG/SVG rendering smoke test — Notebook Constitution §7(한글 시각화 계약)의 engineering support 구현일 뿐 RQ/estimand/연구범위 변경 없음. SSOT §36의 11개 모듈 목록을 "추가 모듈 금지 목록"으로 해석하지 않음. CHANGE_REQUEST 불필요. |
 | AMB-14 | 패키지 네임스페이스 | CR-001 | **CLOSED** | `src/tokenization_premium/` — 재논의하지 않음 |
 
 **Seed freeze (D-RD-01, §30.3 대응)**: master_seed=20260816, split=1456095166, bootstrap=4263151703, model_tuning=3618347261, serving=2218276919, auxiliary=2995913794. `configs/research_v1.yaml`의 `seed_policy` 참조.
